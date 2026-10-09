@@ -1,0 +1,511 @@
+---
+title: "Forecasting U.S. Inflation"
+subtitle: "Project Guide — An Extension of Faust and Wright (2013)"
+format:
+  pdf:
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    geometry: margin=1in
+---
+
+# Background
+
+This project is motivated by [Faust and Wright (2013), *Forecasting Inflation*](https://search.library.berkeley.edu/permalink/01UCS_BER/ppt38b/cdi_elsevier_sciencedirect_doi_10_1016_B978_0_444_53683_9_00001_3). The paper studies how well different methods forecast U.S. inflation. It compares simple forecasting rules with models based on inflation's own history, models that use additional economic variables, models that allow the typical inflation level to change, and combinations of forecasts.
+
+The paper reports four main findings that motivate the project:
+
+1. A simple and credible benchmark can be difficult to beat consistently.
+2. A model tied to one permanent historical inflation level may become outdated when the typical level of inflation changes.
+3. Adding predictors and estimating more parameters does not guarantee better forecasts.
+4. The leading method can change with the forecast horizon; there may be no universal winner.
+
+The project applies a focused set of the paper's forecasting ideas to updated U.S. data, including the inflation disruption after 2020. The goal is to determine whether the paper's findings remain visible in the extended period. These findings are questions to investigate rather than conclusions that the project is required to reproduce.
+
+# Project calendar and working arrangement
+
+| Submission | Due | Working arrangement | Main purpose | Deliverable |
+|---|---:|---|---|---|
+| Stage 1 | Week 6 | Individual | Obtain the data, construct inflation, and complete the exploratory analysis | Stage 1 PDF and source file |
+| Stage 2 | Week 10 | Pair | Assess stationarity, estimate the core paper-based models, and compare their historical forecasts | Stage 2 PDF and `.qmd` source file |
+| Integrated final project | Week 14 | Same pair | Add advanced models and combinations, select a model, evaluate it after 2020, and write one complete paper | Final paper PDF and `.qmd` source, with the detailed Stage 3 work in an appendix |
+
+Stage 2 begins after the Stage 1 feedback and corrections. The final submission is one integrated research paper. Present the main findings in the body of the paper and place the detailed Stage 3 work in an appendix.
+
+# Stage 1 — Data and exploratory analysis
+
+## Purpose
+
+Stage 1 establishes the data and preliminary evidence needed for the forecasting analysis. It focuses on constructing the inflation target and understanding the series. The analysis uses the initial period, 1960Q1–1999Q4.
+
+## Step 1: Obtain the data
+
+Obtain the following series from the [Federal Reserve Economic Data (FRED) website](https://fred.stlouisfed.org/): headline CPI ([`CPIAUCSL`](https://fred.stlouisfed.org/series/CPIAUCSL)), the civilian unemployment rate ([`UNRATE`](https://fred.stlouisfed.org/series/UNRATE)), and the three-month Treasury bill secondary-market rate ([`TB3MS`](https://fred.stlouisfed.org/series/TB3MS)).
+
+Create an appendix table with these columns: series name, FRED code, retrieval date, first observation, last observation, and original frequency.
+
+## Step 2: Verify data quality
+
+Report the number of observations, first and last usable quarters, missing values, and duplicate quarters. Explain any correction made to the downloaded values or dates.
+
+## Step 3: Construct inflation
+
+Inflation measures how quickly the general price level is changing. The price level records how costly goods and services are at a particular time, while inflation records how quickly that level is rising or falling.
+
+Inflation can be calculated from different price indexes, including CPI, the Personal Consumption Expenditures price index, and the GDP deflator. This project uses seasonally adjusted U.S. **headline CPI**, which includes the complete CPI basket, including food and energy.
+
+Convert the monthly series to quarterly observations by retaining March, June, September, and December. Download December 1959 so that 1960Q1 inflation can be calculated from an observed preceding-quarter CPI value.
+
+Let $P_t$ be the end-of-quarter CPI in quarter $t$. Construct annualized quarter-over-quarter inflation as
+
+$$
+\pi_t=400\log\left(\frac{P_t}{P_{t-1}}\right).
+$$
+
+The ratio compares CPI with the preceding quarter. Multiplication by 100 converts the change to a percentage, and multiplication by 4 expresses the one-quarter change at an annual rate. Together, these operations produce the multiplier 400.
+
+For example, if CPI increases from 100 to 101,
+
+$$
+400\log(101/100)\approx3.98.
+$$
+
+The price level increased by approximately 1% during the quarter. The value 3.98% expresses that quarterly increase at an annualized pace.
+
+The project uses the following periods:
+
+| Period | Role |
+|---|---|
+| 1960Q1–1999Q4 | Initial analysis and first model estimation |
+| 2000Q1–2019Q4 | Historical forecast comparison and model selection |
+| 2020Q1–latest available common quarter | Final evaluation and monitoring |
+
+Stage 1 uses 1960Q1–1999Q4 for the exploratory and change-point analysis.
+
+## Step 4: Complete the exploratory analysis
+
+Produce the following figures using 1960Q1–1999Q4:
+
+1. **CPI and inflation:** aligned time plots of the CPI level and constructed inflation. Explain why the level rises persistently while inflation can rise and fall.
+2. **Changing center and variability:** inflation with a trailing 20-quarter mean, together with a trailing 20-quarter standard deviation. Use trailing values so that every point depends only on its date and earlier observations.
+3. **Dependence:** the ACF and PACF of inflation. Identify the most visible lag relationships and describe whether dependence appears weak, persistent, or concentrated at short lags.
+4. **Potential predictors:** time plots of unemployment and the Treasury bill rate, followed by a descriptive plot of inflation against unemployment. Do not interpret the association as causal.
+
+For each figure, describe what it shows about the behavior of the data. Focus on changes in level, changes in variability, persistence, unusual periods, and visible relationships among the series.
+
+## Step 5: Examine changes in the inflation mean
+
+Apply a PELT change-point analysis to the mean of CPI inflation over 1960Q1–1999Q4 using a BIC penalty. Report the estimated change dates and show them on the inflation plot together with the estimated mean for each segment. Include a table containing each segment's start quarter, end quarter, and mean inflation rate. Compare the detected segments with the trailing-mean figure and state whether one constant historical mean adequately describes the full period.
+
+## Stage 1 submission
+
+Submit:
+
+1. the completed report in `.qmd` format;
+2. the rendered PDF.
+
+Stage 1 is assessed on data accuracy, construction of inflation, and quality of the exploratory analysis.
+
+# Stage 2 — Core paper-based forecast comparison
+
+## Purpose
+
+Stage 2 develops the forecasting analysis using the corrected Stage 1 data. It focuses on stationarity, expanding-window estimation, the core paper-based models, and historical forecast comparison through 2019Q4.
+
+## Step 1: Assess stationarity and structural change
+
+Use the initial period, 1960Q1–1999Q4, for this analysis. Examine CPI inflation, unemployment, and the Treasury bill rate using their time plots, ACFs, ADF tests, and KPSS tests. For each ADF test, state the deterministic terms and select the augmentation lag from 0–4 using BIC. When the level results support a unit root, repeat the tests on the first difference. If a major break is visible, explain how it affects the interpretation of the results.
+
+The ADF null hypothesis is a unit root, while the KPSS null hypothesis is stationarity. Classify each series as $I(0)$, $I(1)$, or unresolved by considering the tests together with the plots and possible structural changes. Summarize the conclusion in one table:
+
+| Series | ADF evidence | KPSS evidence | Structural-change evidence | Classification |
+|---|---|---|---|---|
+| CPI inflation |  |  |  |  |
+| Unemployment |  |  |  |  |
+| Treasury bill rate |  |  |  |  |
+
+## Step 2: Set up the expanding-window forecast experiment
+
+A **forecast origin** is the quarter in which a forecast is made and the final quarter included in the estimation sample. The first forecast origin is 1999Q4, so the first estimation sample is 1960Q1–1999Q4. At this origin, estimate or construct each forecasting model using only those observations, produce forecasts through eight quarters ahead, and retain:
+
+- $h=1$: inflation in 2000Q1;
+- $h=4$: inflation in 2000Q4;
+- $h=8$: inflation in 2001Q4.
+
+After inflation for 2000Q1 becomes available, add that observation to the estimation sample and move the forecast origin to 2000Q1. Re-estimate or reconstruct every model using 1960Q1–2000Q1 and produce a new set of forecasts. Continue moving the origin forward one quarter at a time. The sample grows at each origin, which is why this is called an **expanding-window** evaluation.
+
+| Forecast origin | Data used at that origin | $h=1$ target | $h=4$ target | $h=8$ target |
+|---|---|---|---|---|
+| 1999Q4 | 1960Q1–1999Q4 | 2000Q1 | 2000Q4 | 2001Q4 |
+| 2000Q1 | 1960Q1–2000Q1 | 2000Q2 | 2001Q1 | 2002Q1 |
+
+At every origin:
+
+1. retain only the observations available through that quarter;
+2. construct any one-sided variables from those observations;
+3. estimate or construct each required forecasting model;
+4. generate forecasts through eight quarters and retain $h=1,4,8$;
+5. save the origin, target quarter, horizon, model, and forecast;
+6. move the origin forward one quarter and repeat.
+
+After the target quarter has occurred, attach its realized inflation rate and calculate
+
+$$
+e_{j,t}^{(h)}=\pi_t-\widehat\pi_{j,t\mid t-h}^{(h)}.
+$$
+
+Thus, the actual value is used to evaluate a saved forecast, never to construct it. A positive error means that the model underpredicted inflation; a negative error means that it overpredicted inflation. Forecasts are aligned by target quarter before models are compared. For example, the $h=1$, $h=4$, and $h=8$ forecasts for 2010Q1 were produced at different origins, but all three are compared with the same realized 2010Q1 inflation rate.
+
+The historical exercise uses 1999Q4 as the first forecast origin for all three horizons and uses 2019Q4 as the final target quarter. Because longer-horizon forecasts reach their targets later, the number of usable historical errors differs by horizon:
+
+| Horizon | First origin | Last origin | Target period | Number of errors |
+|---|---|---|---|---:|
+| $h=1$ | 1999Q4 | 2019Q3 | 2000Q1–2019Q4 | 80 |
+| $h=4$ | 1999Q4 | 2018Q4 | 2000Q4–2019Q4 | 77 |
+| $h=8$ | 1999Q4 | 2017Q4 | 2001Q4–2019Q4 | 73 |
+
+At each horizon, evaluate all forecasting models over the target period shown in the table.
+
+The forecasting model specification must remain fixed during this experiment. Its variables, transformations, candidate lag range, estimation method, horizons, and forecast construction cannot be changed after examining later forecast errors. At origin $T$, no observation after $T$ may enter estimation, lag selection, local-mean construction, or forecasting.
+
+## Step 3: Implement the core forecasting models
+
+Implement the following seven forecasting models within the expanding-window experiment. Models 1 and 2 provide benchmark forecasts; Models 3–7 estimate forecasting relationships.
+
+### Model 1: random-walk model
+
+At every forecast origin, fit a random-walk model without drift:
+
+$$
+\pi_t=\pi_{t-1}+\varepsilon_t,
+\qquad
+E(\varepsilon_t)=0,
+\qquad
+Var(\varepsilon_t)=\sigma_\varepsilon^2.
+$$
+
+Its point forecast is
+
+$$
+\widehat\pi_{T+h\mid T}^{RW}=\pi_T.
+$$
+
+This model provides the simplest reference for the model comparison.
+
+### Model 2: four-quarter-average benchmark
+
+$$
+\widehat\pi_{T+h\mid T}^{4Q}
+=\frac14\sum_{j=0}^{3}\pi_{T-j}.
+$$
+
+This is the common benchmark used to calculate relative RMSE. Averaging four observations reduces the effect of one noisy quarter while allowing the forecast to follow recent inflation.
+
+At each forecast origin, calculate the average of the four most recently observed inflation rates. Use that value as the forecast through eight quarters and retain $h=1,4,8$. Repeat the calculation after the expanding window moves forward by one quarter.
+
+### Model 3: AR($p$) model
+
+Estimate
+
+$$
+\pi_t=c+\sum_{j=1}^{p}\phi_j\pi_{t-j}+\varepsilon_t,
+$$
+
+where $p\in\{1,2,3,4\}$ is selected by BIC at each origin. Estimate one AR($p$) model for next-quarter inflation. Forecasts from this model are generated iteratively using the same estimated coefficients at every horizon. If the estimated AR is stationary, its intercept and coefficients imply a fixed long-run mean.
+
+### Model 4: direct AR model
+
+For each horizon, estimate a separate equation:
+
+$$
+\pi_{t+h}
+=c_h+\sum_{j=0}^{p_h-1}\phi_{h,j}\pi_{t-j}+\varepsilon_{t+h}.
+$$
+
+For each horizon, create a separate regression dataset. The response in a row dated $t$ is the inflation rate that occurs $h$ quarters later, $\pi_{t+h}$. The regressors in that row are inflation in quarter $t$ and its lags, all of which would have been known at $t$. When estimating the equation at forecast origin $T$, use only rows for which the response has already been observed, so $t+h\leq T$. Select $p_h\in\{1,2,3,4\}$ by BIC using these available rows.
+
+For example, with $h=4$ and $p_h=2$, estimate
+
+$$
+\pi_{t+4}=c_4+\phi_{4,0}\pi_t+\phi_{4,1}\pi_{t-1}+\varepsilon_{t+4}.
+$$
+
+At the 1999Q4 forecast origin, the latest row used to estimate this equation has $t=1998Q4$: its response is observed inflation in 1999Q4, and its regressors are inflation in 1998Q4 and 1998Q3.
+
+### Construct the local mean using simple exponential smoothing
+
+Following the paper, use the simple exponential smoothing method introduced in Week 8. Give 95% weight to the previous local mean and 5% weight to current inflation. In the course notation, $\alpha=0.05$. These weights are fixed by the project and are not estimated. Initialize the smoothed level with the first inflation observation and then update it one quarter at a time:
+
+$$
+\tau_{1960Q1}=\pi_{1960Q1},
+\qquad
+\tau_t=0.95\tau_{t-1}+0.05\pi_t.
+$$
+
+and define the inflation gap as
+
+$$
+g_t=\pi_t-\tau_t.
+$$
+
+For example, if the previous local mean is 3.0 and current inflation is 5.0, then
+
+$$
+\tau_t=0.95(3.0)+0.05(5.0)=3.1,
+\qquad
+g_t=5.0-3.1=1.9.
+$$
+
+At each forecast origin, continue this update through the final observed quarter. The calculation is one-sided because the local mean at origin $T$, $\tau_T$, uses no inflation observation after $T$.
+
+### Model 5: gap AR model
+
+Estimate
+
+$$
+g_t=a+\sum_{j=1}^{p}\rho_jg_{t-j}+v_t,
+$$
+
+selecting $p\in\{1,2,3,4\}$ by BIC. Forecast the gap using the iterative method and add the current local mean back:
+
+$$
+\widehat\pi_{T+h\mid T}^{GAP}
+=\tau_T+\widehat g_{T+h\mid T}.
+$$
+
+The future local mean is held at $\tau_T$ while the forecast is made because the future inflation observations needed to update it are not yet available. Comparison with the AR($p$) model asks whether recentering inflation around a slowly changing level improves forecasts.
+
+### Model 6: fixed-persistence gap forecast
+
+Following the restricted specification in Faust and Wright, impose the persistence value $0.46$:
+
+$$
+\widehat\pi_{T+h\mid T}^{FIX}
+=\tau_T+0.46^h g_T.
+$$
+
+The value 0.46 is taken from the paper and is not re-estimated. The inflation gap shrinks toward zero as the horizon increases. Comparison with the estimated gap AR asks whether estimating additional persistence parameters produces enough benefit to compensate for their uncertainty.
+
+### Model 7: direct Phillips-curve model
+
+This model uses the same response and inflation regressors as the direct AR, but adds the unemployment rate observed at time $t$. For each horizon, estimate
+
+$$
+\pi_{t+h}
+=c_h+\sum_{j=0}^{p_h-1}\phi_{h,j}\pi_{t-j}
++\lambda_hu_t+\varepsilon_{t+h},
+$$
+
+For each estimation row, $\pi_{t+h}$ is the future inflation response, the inflation lags are known at time $t$, and $u_t$ is `UNRATE` observed at time $t$. As with the direct AR, use only rows satisfying $t+h\leq T$ when the forecast origin is $T$, select the inflation lag length from 1–4 by BIC, and estimate a separate equation for $h=1$, $h=4$, and $h=8$.
+
+Compare this model with the direct AR to assess whether unemployment improves forecast accuracy beyond the information contained in past inflation.
+
+## Step 4: Evaluate the forecasts
+
+For each saved forecast, calculate the error as the realized inflation rate minus the forecast:
+
+$$
+e_{j,t}^{(h)}=\pi_t-\widehat\pi_{j,t\mid t-h}^{(h)}.
+$$
+
+A positive error means that the model forecast too little inflation, while a negative error means that it forecast too much. In the formula, $j$ identifies the forecasting model, $t$ is the target quarter, $h$ is the horizon, and $n_h$ is the number of forecast errors available at that horizon.
+
+For every forecasting model and every horizon, calculate:
+
+$$
+RMSE_{j,h}
+=\sqrt{\frac{1}{n_h}\sum_t\left(e_{j,t}^{(h)}\right)^2},
+$$
+
+$$
+rRMSE_{j,h}=\frac{RMSE_{j,h}}{RMSE_{4Q,h}},
+$$
+
+Here, $RMSE_{4Q,h}$ is the RMSE of the four-quarter-average benchmark at horizon $h$. A relative RMSE below 1 means that the model has a lower RMSE than the benchmark; for example, 0.90 means that its RMSE is 10% lower. A relative RMSE above 1 means that it has a higher RMSE than the benchmark.
+
+$$
+MAE_{j,h}=\frac{1}{n_h}\sum_t\left|e_{j,t}^{(h)}\right|,
+\qquad
+ME_{j,h}=\frac{1}{n_h}\sum_te_{j,t}^{(h)}.
+$$
+
+RMSE is the primary ranking measure, and a smaller value indicates more accurate forecasts. Use MAE to assess whether a few large errors are driving the RMSE result. If two models have similar MAE values but very different RMSE values, the model with the larger RMSE likely made a small number of particularly large errors. If RMSE and MAE give the same ranking, the better model also has smaller typical errors. Mean error retains the signs: $ME>0$ indicates underprediction and $ME<0$ indicates overprediction.
+
+Report the results for $h=1,4,8$ in one main table, using one row for every model-horizon combination. The following two rows illustrate the layout and the relative-RMSE calculation; the numbers are examples only:
+
+| Model | Horizon | $n_h$ | RMSE | Relative RMSE | MAE | Mean error |
+|---|---:|---:|---:|---:|---:|---:|
+| Four-quarter-average benchmark | 4 | 77 | 2.00 | 1.00 | 1.45 | 0.20 |
+| AR($p$) model | 4 | 77 | 1.80 | 0.90 | 1.30 | 0.10 |
+
+Complete this table for every model at $h=1$, $h=4$, and $h=8$. Interpret each horizon separately because the ranking can change with the forecast horizon.
+
+## Step 5: Diagnose the leading one-step model
+
+Among the estimated core models, select the model with the lowest $h=1$ RMSE and refit it using data through 2019Q4. Examine its residual time plot, residual ACF, Ljung–Box result, and residual variability. These checks show whether predictable patterns remain in the errors, whether variability is unstable, or whether a few large errors may be driving RMSE.
+
+## Step 6: Summarize the Stage 2 results
+
+Briefly identify the lowest-RMSE model at each horizon, state which models have lower RMSE than the four-quarter-average benchmark, and describe the main patterns in MAE and mean error. The formal DM–HLN tests and conclusions about the paper's ideas are completed in the integrated final project after the advanced models and forecast combinations are added.
+
+## Stage 2 submission
+
+Submit the Stage 2 report as a PDF and its `.qmd` source file.
+
+# Integrated final project — Advanced methods, selection, and monitoring
+
+## Purpose
+
+The Week 14 submission revises the earlier work and presents the complete analysis as one research paper. The new analysis adds one multivariate model, a local-level state-space model, and two simple forecast combinations. It then selects one forecasting model using only pre-2020 evidence and evaluates that model after 2020.
+
+## Step 1: Add a constant-coefficient VAR model
+
+Use the three-variable system
+
+$$
+y_t=(\pi_t,u_t,r_t)',
+$$
+
+where $\pi_t$ is CPI inflation, $u_t$ is `UNRATE`, and $r_t$ is `TB3MS`.
+
+Estimate the variables in levels using a constant-coefficient VAR:
+
+$$
+y_t=c+A_1y_{t-1}+\cdots+A_py_{t-p}+\varepsilon_t.
+$$
+
+At every forecast origin, select $p\in\{1,2,3,4\}$ by BIC, estimate the VAR using the expanding sample, and generate forecasts iteratively through eight quarters. Retain the inflation forecasts at $h=1,4,8$. The coefficients are constant within each estimated VAR but are re-estimated when the forecast origin advances.
+
+Use the Stage 2 stationarity results to discuss any limitations of the level specification, but keep the same VAR model throughout the expanding-window evaluation.
+
+## Step 2: Add the local-level state-space model
+
+Estimate
+
+$$
+\pi_t=\mu_t+\varepsilon_t,
+\qquad
+\mu_t=\mu_{t-1}+\eta_t.
+$$
+
+The observed inflation rate is separated into a changing underlying level $\mu_t$ and temporary quarter-specific noise $\varepsilon_t$. The disturbance $\eta_t$ allows the underlying level itself to move over time.
+
+At each forecast origin $T$, estimate both disturbance variances by maximum likelihood using data available through $T$. Use the Kalman filter to estimate the current underlying level, $\widehat\mu_{T\mid T}$. The required point forecasts are
+
+$$
+\widehat\pi_{T+h\mid T}^{LL}=\widehat\mu_{T\mid T},
+\qquad h\in\{1,4,8\}.
+$$
+
+## Step 3: Construct two forecast combinations
+
+Use forecasts from seven component models: the AR($p$), direct AR, gap AR, fixed-persistence gap, Phillips-curve, VAR, and local-level state-space models. Do not include the random-walk or four-quarter-average benchmark.
+
+Construct each combination separately at every forecast origin and horizon. At origin $T$, combine the seven $h=1$ forecasts to produce one combined $h=1$ forecast. Then combine the seven $h=4$ forecasts to produce one combined $h=4$ forecast, and do the same for $h=8$.
+
+### Equal-weight combination
+
+Give each of the seven models weight $1/7$:
+
+$$
+\widehat\pi_{T+h\mid T}^{EW}
+=\frac{1}{7}\sum_{j=1}^{7}\widehat\pi_{j,T+h\mid T}.
+$$
+
+This produces a separate equal-weight forecast for $h=1$, $h=4$, and $h=8$ at every origin.
+
+### Inverse-RMSE combination
+
+This combination gives more weight to models that produced smaller forecast errors in the past. At each origin and horizon, calculate the component models' RMSEs using only forecast errors already observed at that time and set
+
+$$
+w_{j,T,h}
+=\frac{1/RMSE_{j,T,h}^{past}}
+{\sum_{k=1}^{7}\left(1/RMSE_{k,T,h}^{past}\right)}.
+$$
+
+$$
+\widehat\pi_{T+h\mid T}^{IR}
+=\sum_{j=1}^{7}w_{j,T,h}\widehat\pi_{j,T+h\mid T}.
+$$
+
+Use equal weights when fewer than eight past errors are available for any component model at that horizon. Once all component models have at least eight past errors, use the inverse-RMSE weights.
+
+## Step 4: Evaluate the complete model set through 2019Q4
+
+Now evaluate all models over the same horizon-specific historical samples through 2019Q4. For every model, report RMSE, relative RMSE, MAE, and mean error at $h=1$, $h=4$, and $h=8$. At each horizon, rank the models by RMSE, identify which models beat the four-quarter-average benchmark, and use MAE and mean error to determine whether the results reflect generally smaller errors, a few large errors, or systematic underprediction or overprediction.
+
+## Step 5: Conduct all DM–HLN comparisons
+
+Apply the course DM–HLN test separately at $h=1$, $h=4$, and $h=8$ for:
+
+1. each other model versus the four-quarter-average benchmark;
+2. gap AR versus AR($p$), to assess the changing-mean specification;
+3. Phillips-curve model versus direct AR, to assess the contribution of unemployment;
+4. local-level state-space model versus AR($p$), to assess a changing inflation level;
+5. VAR versus AR($p$), to assess the contribution of the additional variables; and
+6. each forecast combination versus the individual model with the lowest RMSE at that horizon.
+
+For every comparison, report the model pair, horizon, RMSE difference, DM–HLN statistic, p-value, and conclusion. Use RMSE to determine which model was more accurate and the p-value to determine whether the evidence of a difference is statistically significant. No other pairwise DM–HLN tests are required.
+
+Run every comparison separately at $h=1$, $h=4$, and $h=8$ using the matched forecast errors available at that horizon; do not combine the horizons into one test. If a model has lower RMSE and the p-value is below 0.05, conclude that it forecasts significantly better at that horizon. If it has lower RMSE but the p-value is at least 0.05, report the improvement but state that the evidence is not strong enough to establish better forecasting performance.
+
+The DM–HLN results provide evidence for the final conclusions about the paper's ideas. They do not select the single model used after 2020; that selection is completed in Step 6.
+
+## Step 6: Select one model for the post-2020 evaluation
+
+After completing the horizon-specific evaluation and tests, calculate the following score for every model in the complete comparison, including the two forecast-combination models:
+
+$$
+Score_j=
+\frac{rRMSE_{j,1}+rRMSE_{j,4}+rRMSE_{j,8}}{3}.
+$$
+
+The score summarizes performance across the three required horizons and is used only to select the model for the post-2020 evaluation. Select the model with the lowest score using only targets through 2019Q4. If two scores differ by less than 0.01, choose the simpler model: a fixed or no-parameter model before an estimated model, a univariate model before a multivariate model, and equal weights before estimated combination weights.
+
+This rule selects one forecasting model even when the horizon-specific leaders differ. Continue to report the separate horizon rankings because the paper also asks whether there is a universal winner.
+
+## Step 7: Monitoring
+
+Monitoring examines whether the selected model continues to perform well after 2019Q4.
+
+1. Estimate the selected model once using data from 1960Q1 through 2019Q4 and keep it fixed.
+2. Use the model's historical one-step fitted errors to calculate
+
+$$
+CL=\bar e_{pre},
+\qquad
+LCL=\bar e_{pre}-3s_{e,pre},
+\qquad
+UCL=\bar e_{pre}+3s_{e,pre}.
+$$
+
+Here $\bar e_{pre}$ and $s_{e,pre}$ are the mean and standard deviation of those errors. $CL$, $LCL$, and $UCL$ are the center, lower, and upper monitoring limits.
+
+3. Use the fixed model to generate a one-step-ahead forecast at every post-2020 forecast origin.
+4. Calculate the post-2020 one-step forecast errors, RMSE, MAE, and mean error.
+5. Plot the forecasts against actual inflation and plot the errors against $CL$, $LCL$, and $UCL$. Identify errors outside the limits and conclude whether performance is stable or shows a sudden break, persistent bias, or increased variability.
+
+## Step 8: Reach final conclusions
+
+Assess the four paper-based claims and the monitoring claim below.
+
+1. **A simple benchmark is difficult to beat consistently.** Compare every model with the four-quarter-average benchmark at $h=1,4,8$. The claim is supported if no competing model has both lower RMSE and a significant DM–HLN result at two or more horizons.
+
+2. **Allowing the typical inflation level to change improves forecasts.** Compare the gap AR and local-level state-space model with AR($p$). The claim is supported if both changing-mean models have lower RMSE than AR($p$) at two or more horizons and each has at least one significant DM–HLN result. If only one changing-mean model meets this criterion, the claim is partially supported.
+
+3. **More complex models are not automatically more accurate.** Compare the Phillips curve with the direct AR, the VAR with AR($p$), the estimated gap model with the fixed-gap model, and inverse-RMSE weights with equal weights. The claim is supported when the more complex alternatives do not show a consistent pattern of lower RMSE supported by the DM–HLN results.
+
+4. **There is no universal winner.** Identify the lowest-RMSE model at each horizon. The claim is supported if the leading model changes across $h=1,4,8$ and not supported if the same model leads at all three horizons.
+
+5. **The selected model remained stable after 2020.** Use the monitoring chart and the post-2020 one-step forecast errors. The claim is supported if the errors remain within the monitoring limits without a sustained shift, persistent bias, or clear increase in variability. It is partially supported if there is an isolated warning but no continuing pattern, and not supported if the chart shows repeated warnings or a sustained change.
+
+For each claim, report **supported**, **partially supported**, **not supported**, or **inconclusive** and cite the relevant evidence. For Claims 1–4, identify the models, horizons, RMSE differences, and DM–HLN results. For Claim 5, cite the monitoring chart, errors outside the limits, and any pattern in bias or variability. Use **inconclusive** when the available evidence is too limited or mixed to apply the criterion.
+
+## Week 14 submission
+
+Submit the final-report PDF and its `.qmd` source. Include the detailed Stage 3 analysis as an appendix to the final report.
+
+# Reference
+
+[Faust, J., and Wright, J. H. (2013). “Forecasting Inflation.” In *Handbook of Economic Forecasting*, Volume 2A.](https://search.library.berkeley.edu/permalink/01UCS_BER/ppt38b/cdi_elsevier_sciencedirect_doi_10_1016_B978_0_444_53683_9_00001_3)

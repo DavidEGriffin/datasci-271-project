@@ -1,0 +1,260 @@
+---
+title: "Forecasting U.S. CPI Inflation"
+subtitle: "A Recursive Out-of-Sample Study"
+author:
+  - "Student Name"
+  - "Student Name"
+date: today
+format:
+  pdf:
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    geometry: margin=1in
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+<!--
+This template gives the required organization of the Week 14 paper. Replace
+the prompts with the pair's analysis and delete every instructional callout
+and comment before submission. The final paper must revise and synthesize the
+earlier stages; it should not read like two assignments pasted together.
+-->
+
+# Abstract
+
+::: {.callout-note title="What belongs here"}
+Write approximately 150–200 words after completing the paper. State the forecasting question, CPI target, historical out-of-sample design, model families, selected model, post-2020 conclusion, and the most important finding about the paper's claims. Avoid equations, citations, and unexplained abbreviations. Delete this box before submission.
+:::
+
+[Write the abstract here.]
+
+# Background and research question
+
+::: {.callout-note title="What belongs here"}
+Introduce [Faust and Wright (2013)](https://search.library.berkeley.edu/permalink/01UCS_BER/ppt38b/cdi_elsevier_sciencedirect_doi_10_1016_B978_0_444_53683_9_00001_3) as the motivation for the study. Explain inflation and its forecasting importance briefly. Summarize the four paper-based ideas and the monitoring question, state the project's research question, and preview the pair's principal findings. Do not repeat the project guide or write a long literature review. Delete this box before submission.
+:::
+
+This section should answer:
+
+1. What did Faust and Wright investigate?
+2. Why is inflation forecasting a useful application?
+3. Which paper-based ideas does this project reassess?
+4. What is the updated research question?
+5. What are the principal conclusions of this paper?
+
+# Data and preliminary evidence
+
+::: {.callout-note title="What belongs here"}
+Revise and condense the strongest Stage 1 exploratory evidence and the Stage 2 stationarity analysis. Document the data source and transformations, show the figures that affect modeling, and summarize the stationarity and break evidence. Do not reproduce routine data checks or pages of test output. Delete this box before submission.
+:::
+
+## Variables and construction
+
+Identify `CPIAUCSL`, `UNRATE`, and `TB3MS`, their units, their FRED source, the retrieval date, and the final common sample. Explain why March, June, September, and December observations represent the quarterly series.
+
+Define
+
+$$
+\pi_t=400\log\left(\frac{P_t}{P_{t-1}}\right)
+$$
+
+and explain the multiplier 400 and one numerical example. Distinguish the CPI level from the constructed inflation rate.
+
+## Exploratory evidence
+
+Include no more than three main-text figures:
+
+1. CPI and CPI inflation;
+2. inflation with its trailing center or variability summary;
+3. the dependence or predictor figure most important for later modeling.
+
+Summarize the formal evidence in one table:
+
+| Series | Plot and dependence evidence | ADF/KPSS and break evidence | Working classification | Modeling implication |
+|---|---|---|---|---|
+| CPI inflation |  |  |  |  |
+| Unemployment |  |  |  |  |
+| Treasury bill rate |  |  |  |  |
+
+Explain whether a fixed historical inflation level appears credible and how the evidence affects the interpretation of the AR($p$) and changing-mean models. Move full stationarity and break-test output to the diagnostics appendix.
+
+# Forecasting design
+
+::: {.callout-note title="What belongs here"}
+Explain the forecasting experiment precisely enough that another analyst could reproduce it. Begin with a plain-language explanation and then provide the notation. Disclose any corrections made to the Stage 1 plan. Delete this box before submission.
+:::
+
+## Periods and information flow
+
+| Period | Role |
+|---|---|
+| 1960Q1–1999Q4 | Initial analysis, design, and estimation |
+| 2000Q1–2019Q4 | Historical out-of-sample comparison and selection |
+| 2020Q1–latest available common quarter | Final evaluation and monitoring |
+
+Explain that expanding-window re-estimation is used during the historical comparison through 2019Q4. Give one forecast-origin example and state which model choices remain fixed as the origin advances. Then explain that the selected model is estimated once through 2019Q4 and kept fixed during the post-2020 evaluation.
+
+## Targets and horizons
+
+Explain how origin, horizon, and target quarter are related. State that the project calculates forecasts only for $h=1,4,8$. The historical exercise begins from the common forecast origin 1999Q4 and ends with the common final target 2019Q4. Consequently, the historical target periods are 2000Q1–2019Q4 for $h=1$, 2000Q4–2019Q4 for $h=4$, and 2001Q4–2019Q4 for $h=8$.
+
+## Accuracy measures and planned tests
+
+Define the error as actual minus forecast. Present RMSE, relative RMSE, MAE, and mean error, and identify the four-quarter-average forecast as the common benchmark. Explain what each measure contributes and why RMSE is the primary criterion.
+
+List the pre-specified DM–HLN model pairs. State that every comparison is run separately at $h=1,4,8$ with the course multi-horizon and small-sample corrections.
+
+## Corrections to the Stage 1 plan
+
+| Original decision | Corrected decision | Reason | Made without using post-2020 outcomes? |
+|---|---|---|---|
+|  |  |  |  |
+
+Write “None” when there was no change. Correcting a documented mistake is acceptable; hiding a change is not.
+
+# Forecasting methods
+
+::: {.callout-note title="What belongs here"}
+Present the models as a coherent set rather than in the order in which assignments were completed. For each family, state its mathematical form, explain its forecasting assumption, and identify the comparison it supports. Keep software syntax and complete coefficient tables out of the main paper. Delete this box before submission.
+:::
+
+## Benchmarks and autoregressions
+
+Explain the random-walk forecast, four-quarter-average benchmark, AR($p$) model, and direct AR model. State the BIC lag rule and explain that forecasts from the AR($p$) model are generated iteratively, whereas the direct AR estimates a separate equation for each horizon.
+
+## Changing-mean forecasts
+
+Present
+
+$$
+\tau_t=0.95\tau_{t-1}+0.05\pi_t,
+\qquad
+g_t=\pi_t-\tau_t.
+$$
+
+Explain why the local mean is one-sided, how the gap AR is forecast, and why the fixed-persistence model uses $0.46$ rather than an estimated coefficient.
+
+## Phillips-curve forecast
+
+Present the direct equation that adds `UNRATE`. Explain that the model tests predictive information rather than causality and discuss how the Stage 1 persistence evidence affects its interpretation.
+
+## Constant-coefficient VAR
+
+State the three-variable system, level specification, and BIC lag rule. Explain that the coefficients are constant within each estimated VAR and are re-estimated as the expanding window advances. Discuss the Stage 2 stationarity evidence as a limitation.
+
+## Local-level state-space model
+
+Present the observation and state equations. Explain temporary noise, changes in the unobserved inflation level, maximum-likelihood variance estimation, and how the Kalman-filter estimate of the current level is used to produce the forecasts.
+
+## Forecast combinations
+
+Describe only the equal-weight and inverse-RMSE combinations. Identify the seven component models and explain that forecasts are combined separately at each origin for $h=1$, $h=4$, and $h=8$. Explain how past horizon-specific RMSE values and weights are calculated without using future errors.
+
+# Historical out-of-sample results
+
+::: {.callout-note title="What belongs here"}
+Integrate the revised Stage 2 evidence with the advanced-model results. Organize the section around substantive findings, not around a list of software outputs. Lead with the size and consistency of accuracy differences, then discuss statistical evidence and diagnostics. Delete this box before submission.
+:::
+
+## Main historical accuracy results through 2019Q4
+
+Include one compact main table. State the horizon-specific target period and number of forecast errors for each horizon:
+
+| Model | $rRMSE$, $h=1$ | $rRMSE$, $h=4$ | $rRMSE$, $h=8$ | MAE evidence | Mean-error direction |
+|---|---:|---:|---:|---|---|
+|  |  |  |  |  |  |
+
+State:
+
+- which models beat the benchmark and by how much;
+- whether the same model leads at all three horizons;
+- whether RMSE and MAE imply similar rankings;
+- which models tend to overpredict or underpredict inflation;
+- whether the advanced models improve on the core models.
+
+Move the complete model-by-horizon results and forecast counts to the forecast-results appendix.
+
+## Planned forecast-comparison tests
+
+Use the four-quarter-average model as the common benchmark. At each horizon, report a DM–HLN comparison between the benchmark and every other core or advanced model.
+
+Also report the focused comparisons that address the study's modeling questions: gap AR versus AR($p$), Phillips-curve model versus direct AR, local-level state-space model versus AR($p$), VAR versus AR($p$), and each forecast-combination model versus the individual model with the lowest RMSE at that horizon. For every comparison and horizon, report the observed accuracy difference, DM–HLN statistic, p-value, and plain-language conclusion. No other pairwise DM–HLN tests are required.
+
+## Diagnostics affecting interpretation
+
+Discuss the residual diagnostics for the leading Stage 2 one-step model and explain any result that affects confidence in its forecasts.
+
+# Selection of the forecasting model
+
+::: {.callout-note title="What belongs here"}
+Show how the rule was applied using only targets through 2019Q4. Do not refer to post-2020 performance when explaining why the model was selected. Delete this box before submission.
+:::
+
+Report
+
+$$
+Score_j=
+\frac{rRMSE_{j,1}+rRMSE_{j,4}+rRMSE_{j,8}}{3}
+$$
+
+for every model in the complete comparison. Name the selected model and apply the simplicity rule when two scores differ by less than 0.01.
+
+# Post-2020 evaluation and monitoring
+
+::: {.callout-note title="What belongs here"}
+Evaluate the selected model rather than selecting a new winner. Use forecasts that could have been issued at 2019Q4 or later. Connect the results to the unusual inflation environment unavailable to the original paper. Delete this box before submission.
+:::
+
+## Monitoring
+
+Explain that monitoring evaluates whether the selected model continues to perform well after 2019Q4. Estimate the model once using data from 1960Q1 through 2019Q4 and keep it fixed. From its historical one-step fitted errors, calculate the average error, error standard deviation, center line, and three-standard-deviation limits. Generate one-step-ahead forecasts at each post-2020 forecast origin and report RMSE, MAE, and mean error. Plot the forecasts against actual inflation and the forecast errors against the fixed monitoring limits. Assess whether performance is stable or shows a sudden break, persistent bias, or increased variability.
+
+# Assessment of the paper-based ideas and monitoring
+
+::: {.callout-note title="What belongs here"}
+This section gives the direct answer to the research question. Combine practical accuracy differences, consistency across horizons, and planned statistical evidence. Do not merely repeat the results table. Delete this box before submission.
+:::
+
+Assess each claim using the stated criterion:
+
+1. **A simple benchmark is difficult to beat consistently.** Support the claim if no model has both lower RMSE than the four-quarter-average benchmark and a significant DM–HLN result at two or more horizons.
+2. **Allowing the typical inflation level to change improves forecasts.** Support the claim if the gap AR and local-level state-space model have lower RMSE than AR($p$) at two or more horizons and each has at least one significant DM–HLN result.
+3. **More complex models are not automatically more accurate.** Compare the Phillips curve with the direct AR, the VAR with AR($p$), the estimated gap model with the fixed-gap model, and inverse-RMSE weights with equal weights. Support the claim when the more complex alternatives do not show a consistent pattern of lower RMSE supported by the DM–HLN results.
+4. **There is no universal winner.** Support the claim if the lowest-RMSE model changes across $h=1,4,8$.
+5. **The selected model remained stable after 2020.** Support the claim if the post-2020 one-step errors remain within the monitoring limits without a sustained shift, persistent bias, or clear increase in variability. Treat an isolated warning without a continuing pattern as partial support and repeated warnings or a sustained change as evidence against the claim.
+
+For each claim, report **supported**, **partially supported**, **not supported**, or **inconclusive** and cite the relevant evidence. For Claims 1–4, identify the models, horizons, RMSE differences, and DM–HLN results. For Claim 5, cite the monitoring chart, errors outside the limits, and any pattern in bias or variability.
+
+# Limitations and conclusion
+
+::: {.callout-note title="What belongs here"}
+State the central answer, the most important practical implication, the principal limitations, and one realistic extension. Do not introduce new empirical results. Distinguish forecast evidence from causal conclusions. Delete this box before submission.
+:::
+
+At minimum, discuss the limited number of post-2020 monitoring observations, uncertainty in stationarity and model selection, the use of a modern revised data vintage, and the fact that predictive relationships do not establish causality.
+
+# References
+
+Include FRED and the methodological sources actually used. Cite the original paper when describing its benchmark, the fixed value 0.46, or its empirical findings.
+
+[Faust, J., and Wright, J. H. (2013). “Forecasting Inflation.” In *Handbook of Economic Forecasting*, Volume 2A.](https://search.library.berkeley.edu/permalink/01UCS_BER/ppt38b/cdi_elsevier_sciencedirect_doi_10_1016_B978_0_444_53683_9_00001_3)
+
+# Appendix A — Reproducibility, revisions, and contributions
+
+Report the retrieval date, software and package versions, file organization, and instructions required to reproduce the paper. Include the Stage 1 and Stage 2 revision record and the contribution statement for both partners.
+
+# Appendix B — Complete forecast results
+
+Provide the complete $h=1,4,8$ accuracy results and the number of forecasts for every model and horizon.
+
+# Appendix C — Supporting diagnostics
+
+Provide the complete stationarity, structural-break, residual, monitoring, and additional forecast-comparison output cited in the main paper.
+
+# Appendix D — Stage 3 analysis
+
+Present the detailed Stage 3 work on the VAR, local-level state-space model, forecast combinations, complete model comparison, model selection, and monitoring. The main paper should report the results needed to answer the research question; this appendix provides the supporting Stage 3 analysis.
