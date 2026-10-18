@@ -1,4 +1,5 @@
 <!-- Ariel: Stage 2 sections 4.2, 4.4.1, 4.4.5 and the random-walk part of 4.5.
+Generated from ariel/stage2-ariel.qmd (edit that file, then regenerate this one).
 Pulled into the team report with an include shortcode pointing at this file.
 Paths assume the main .qmd sits at the repo root. Cite Faust and Wright (2013)
 and Perron (1989) in the team References. -->
@@ -57,9 +58,9 @@ We use the initial period, 1960Q1–1999Q4 (160 quarters), for every test in thi
 ```{r ariel-breaks}
 # cpt.mean() assumes unit noise variance, so we divide by a robust estimate
 # of the quarter-to-quarter noise scale before running PELT.
-noise_scale <- function(x) mad(diff(x)) / sqrt(2)
+ar_noise_scale <- function(x) mad(diff(x)) / sqrt(2)
 
-segments_for <- function(x, dates, scale = 1) {
+ar_segments_for <- function(x, dates, scale = 1) {
   cp    <- cpt.mean(x / scale, method = "PELT", penalty = "BIC")
   ends  <- c(cpts(cp), length(x))
   start <- c(1, head(ends, -1) + 1)
@@ -67,19 +68,22 @@ segments_for <- function(x, dates, scale = 1) {
          mean = param.est(cp)$mean * scale)
 }
 
-pi_scale  <- noise_scale(ar_initial$Inflation)
-ar_segs      <- segments_for(ar_initial$Inflation, ar_initial$date, pi_scale)
-n_raw     <- nrow(segments_for(ar_initial$Inflation, ar_initial$date)) - 1  # Stage 1
-n_scaled  <- nrow(ar_segs) - 1
-n_other   <- sapply(c("Unemployment", "Treasury"), function(v)
-  nrow(segments_for(ar_initial[[v]], ar_initial$date,
-                    noise_scale(ar_initial[[v]]))) - 1)
+ar_pi_scale  <- ar_noise_scale(ar_initial$Inflation)
+ar_segs      <- ar_segments_for(ar_initial$Inflation, ar_initial$date, ar_pi_scale)
+ar_n_raw     <- nrow(ar_segments_for(ar_initial$Inflation, ar_initial$date)) - 1  # Stage 1
+ar_n_scaled  <- nrow(ar_segs) - 1
+ar_n_other   <- sapply(c("Unemployment", "Treasury"), function(v)
+  nrow(ar_segments_for(ar_initial[[v]], ar_initial$date,
+                    ar_noise_scale(ar_initial[[v]]))) - 1)
 
-seg_mean <- function(from, to) ar_segs$mean[ar_segs$start >= as.Date(from) &
+ar_seg_mean <- function(from, to) ar_segs$mean[ar_segs$start >= as.Date(from) &
                                            ar_segs$end <= as.Date(to)]
-ar_high <- seg_mean("1973-01-01", "1981-09-30")
-ar_low  <- seg_mean("1981-10-01", "1999-12-31")
-join_and <- function(x) if (length(x) < 2) x else
+ar_high <- ar_seg_mean("1973-01-01", "1981-09-30")
+ar_low  <- ar_seg_mean("1981-10-01", "1999-12-31")
+# The prose names the first two segments and then these two groups, so every
+# segment must fall in exactly one of them.
+stopifnot(length(ar_high) + length(ar_low) + 2 == nrow(ar_segs))
+ar_join_and <- function(x) if (length(x) < 2) x else
   paste0(paste(head(x, -1), collapse = ", "), " and ", tail(x, 1))
 ```
 
@@ -105,12 +109,12 @@ ar_initial |>
 ```{r fig-ariel-acf}
 #| fig-cap: "Sample ACFs of the three series in levels, lags 1–20. Dashed lines are approximate 95% bounds."
 #| fig-height: 3.2
-acf_df <- bind_rows(lapply(names(ar_series_labels), function(v) {
+ar_acf_df <- bind_rows(lapply(names(ar_series_labels), function(v) {
   a <- acf(ar_initial[[v]], lag.max = 20, plot = FALSE)
   tibble(series = v, lag = a$lag[-1], acf = a$acf[-1])
 })) |> mutate(series = factor(series, names(ar_series_labels), ar_series_labels))
 
-ggplot(acf_df, aes(lag, acf)) +
+ggplot(ar_acf_df, aes(lag, acf)) +
   geom_hline(yintercept = 0, linewidth = 0.3) +
   geom_hline(yintercept = c(-1, 1) * 1.96 / sqrt(nrow(ar_initial)),
              linetype = "dashed", colour = "steelblue") +
@@ -119,15 +123,15 @@ ggplot(acf_df, aes(lag, acf)) +
   labs(x = "Lag (quarters)", y = "ACF",
        title = "Autocorrelation of the series in levels, 1960Q1 to 1999Q4")
 
-acf_at <- function(v, k) acf(ar_initial[[v]], lag.max = k, plot = FALSE)$acf[k + 1]
+ar_acf_at <- function(v, k) acf(ar_initial[[v]], lag.max = k, plot = FALSE)$acf[k + 1]
 ```
 
-**What the plots show.** Inflation rises from about 1% in the early 1960s to double digits in 1974 and 1979–80, then falls back after 1981. Its ACF starts at `r ar_f(acf_at("Inflation", 1))` and is still `r ar_f(acf_at("Inflation", 8))` at lag 8, so dependence is persistent, but it decays steadily rather than staying near one. Unemployment and the Treasury bill rate are more persistent still, with lag-1 autocorrelations of `r ar_f(acf_at("Unemployment", 1))` and `r ar_f(acf_at("Treasury", 1))`. Unemployment moves in long cyclical swings, and the bill rate tracks inflation upward before spiking during the 1979–82 Volcker tightening. None of the three series returns quickly to a single fixed level.
+**What the plots show.** Inflation rises from about 1% in the early 1960s to double digits in 1974 and 1979–80, then falls back after 1981. Its ACF starts at `r ar_f(ar_acf_at("Inflation", 1))` and is still `r ar_f(ar_acf_at("Inflation", 8))` at lag 8, so dependence is persistent, but it decays steadily rather than staying near one. Unemployment and the Treasury bill rate are more persistent still, with lag-1 autocorrelations of `r ar_f(ar_acf_at("Unemployment", 1))` and `r ar_f(ar_acf_at("Treasury", 1))`. Unemployment moves in long cyclical swings, and the bill rate tracks inflation upward before spiking during the 1979–82 Volcker tightening. None of the three series returns quickly to a single fixed level.
 
 **Unit-root tests.** For each series we run the augmented Dickey–Fuller (ADF) test with a constant and no trend, since none of these rates has an economic reason to trend deterministically. We choose the augmentation lag from 0–4 by BIC, comparing all five regressions on the same estimation sample so the BIC values are comparable, and then run `urca::ur.df()` at the selected lag. We don't use the `selectlags = "BIC"` option in `ur.df()` here, since it only searches lags 1 through the maximum and can't select 0. The KPSS test uses a constant (`type = "mu"`) and the short Newey–West bandwidth of `r ur.kpss(ar_initial$Inflation, type = "mu", lags = "short")@lag` lags, and we repeat it with the long bandwidth of `r ur.kpss(ar_initial$Inflation, type = "mu", lags = "long")@lag` lags as a robustness check. The ADF null hypothesis is a unit root, and the KPSS null hypothesis is stationarity. When the level results support a unit root, we repeat both tests on the first difference. @tbl-ariel-stationarity collects the results.
 
 ```{r ariel-unit-root}
-adf_lag_bic <- function(x, max_lag = 4) {
+ar_adf_lag_bic <- function(x, max_lag = 4) {
   dx  <- diff(x)
   idx <- (max_lag + 1):length(dx)          # common sample for every lag
   bic <- sapply(0:max_lag, function(k) {
@@ -138,8 +142,8 @@ adf_lag_bic <- function(x, max_lag = 4) {
   which.min(bic) - 1
 }
 
-run_tests <- function(x) {
-  k        <- adf_lag_bic(x)
+ar_run_tests <- function(x) {
+  k        <- ar_adf_lag_bic(x)
   adf_fit  <- ur.df(x, type = "drift", lags = k)
   kpss_fit <- ur.kpss(x, type = "mu", lags = "short")
   kpss_lng <- ur.kpss(x, type = "mu", lags = "long")
@@ -151,23 +155,23 @@ run_tests <- function(x) {
          kpss_long = kpss_lng@teststat)
 }
 
-ur_tbl <- bind_rows(lapply(names(ar_series_labels), function(v) {
-  lev <- run_tests(ar_initial[[v]]) |> mutate(series = v, form = "Level")
+ar_ur_tbl <- bind_rows(lapply(names(ar_series_labels), function(v) {
+  lev <- ar_run_tests(ar_initial[[v]]) |> mutate(series = v, form = "Level")
   if (lev$adf < lev$adf_cv) return(lev)  # unit root rejected: no differencing
-  bind_rows(lev, run_tests(diff(ar_initial[[v]])) |>
+  bind_rows(lev, ar_run_tests(diff(ar_initial[[v]])) |>
               mutate(series = v, form = "First difference"))
 })) |>
   mutate(adf_reject = adf < adf_cv, kpss_reject = kpss > kpss_cv,
          kpss_long_reject = kpss_long > kpss_cv)
 
-ar_g    <- function(v, form, col) ur_tbl[[col]][ur_tbl$series == v & ur_tbl$form == form]
-ar_lv   <- ur_tbl |> filter(form == "Level")
-ar_dfs  <- ur_tbl |> filter(form != "Level")
+ar_g    <- function(v, form, col) ar_ur_tbl[[col]][ar_ur_tbl$series == v & ar_ur_tbl$form == form]
+ar_lv   <- ar_ur_tbl |> filter(form == "Level")
+ar_dfs  <- ar_ur_tbl |> filter(form != "Level")
 ```
 
-In levels, no ADF statistic reaches the 5% critical value of `r ar_f(ur_tbl$adf_cv[1])`, and every short-bandwidth KPSS statistic exceeds its 5% critical value of `r ar_f(ur_tbl$kpss_cv[1], 3)`, though none reaches the 1% value of `r ar_f(ur_tbl$kpss_cv1[1], 3)`. In first differences, both tests indicate stationarity for all three series. The KPSS rejections are also sensitive to the bandwidth. With the long bandwidth, the level statistics fall to `r ar_f(ar_g("Inflation","Level","kpss_long"),3)`, `r ar_f(ar_g("Unemployment","Level","kpss_long"),3)` and `r ar_f(ar_g("Treasury","Level","kpss_long"),3)`, and `r if (any(ar_lv$kpss_long_reject)) "only some" else "none"` reject. The long bandwidth trades power for size, so this doesn't show the series are stationary, but it does mean the KPSS evidence against stationarity is weak for every series.
+In levels, no ADF statistic reaches the 5% critical value of `r ar_f(ar_ur_tbl$adf_cv[1])`, and every short-bandwidth KPSS statistic exceeds its 5% critical value of `r ar_f(ar_ur_tbl$kpss_cv[1], 3)`, though none reaches the 1% value of `r ar_f(ar_ur_tbl$kpss_cv1[1], 3)`. In first differences, both tests indicate stationarity for all three series. The KPSS rejections are also sensitive to the bandwidth. With the long bandwidth, the level statistics fall to `r ar_f(ar_g("Inflation","Level","kpss_long"),3)`, `r ar_f(ar_g("Unemployment","Level","kpss_long"),3)` and `r ar_f(ar_g("Treasury","Level","kpss_long"),3)`, and `r c("none", "only some", "all")[1 + any(ar_lv$kpss_long_reject) + all(ar_lv$kpss_long_reject)]` reject. The long bandwidth trades power for size, so this doesn't show the series are stationary, but it does mean the KPSS evidence against stationarity is weak for every series.
 
-**Structural change.** Applied to raw inflation, PELT finds the `r n_raw` breaks reported in Stage 1, about one every `r round(160 / (n_raw + 1))` quarters, which looks more like PELT tracking a wandering series than like a few regimes. The reason is that `cpt.mean()` assumes unit noise variance, while inflation's quarter-to-quarter noise has a standard deviation of about `r ar_f(pi_scale)` points, so the BIC penalty is too small for the scale of the data. We therefore divide inflation by a robust estimate of its noise scale, $\text{MAD}(\Delta\pi_t)/\sqrt{2}$, before running PELT, which changes the Stage 1 settings. The rescaled analysis finds `r n_scaled` breaks (@fig-ariel-levels). They describe inflation near `r ar_f(ar_segs$mean[1], 1)`% through 1965, about `r ar_f(ar_segs$mean[2], 1)`% through 1972, a high and volatile 1973–81 with segment means between `r ar_f(min(ar_high), 1)`% and `r ar_f(max(ar_high), 1)`%, and a lower level after 1981, with segment means of `r join_and(paste0(ar_f(ar_low, 1), "%"))`. These shifts matter for the tests, since a series that is stationary around a mean that shifts a few times can make the ADF test fail to reject and the KPSS test reject (Perron 1989), which is exactly the pattern in levels above. Ignoring the shifts would lead us to treat inflation as having a unit root when its behavior is better described as reverting to a slowly changing level. We don't use PELT for unemployment or the bill rate. Their quarter-to-quarter changes are small relative to their slow swings, so even after the same rescaling PELT splits them into `r min(n_other) + 1` to `r max(n_other) + 1` segments, which describes persistence rather than separate regimes.
+**Structural change.** Applied to raw inflation, PELT finds the `r ar_n_raw` breaks reported in Stage 1, about one every `r round(160 / (ar_n_raw + 1))` quarters, which looks more like PELT tracking a wandering series than like a few regimes. The reason is that `cpt.mean()` assumes unit noise variance, while inflation's quarter-to-quarter noise has a standard deviation of about `r ar_f(ar_pi_scale)` points, so the BIC penalty is too small for the scale of the data. We therefore divide inflation by a robust estimate of its noise scale, $\text{MAD}(\Delta\pi_t)/\sqrt{2}$, before running PELT, which changes the Stage 1 settings. The rescaled analysis finds `r ar_n_scaled` breaks (@fig-ariel-levels). They describe inflation near `r ar_f(ar_segs$mean[1], 1)`% through 1965, about `r ar_f(ar_segs$mean[2], 1)`% through 1972, a high and volatile 1973–81 with segment means between `r ar_f(min(ar_high), 1)`% and `r ar_f(max(ar_high), 1)`%, and a lower level after 1981, with segment means of `r ar_join_and(paste0(ar_f(ar_low, 1), "%"))`. These shifts matter for the tests, since a series that is stationary around a mean that shifts a few times can make the ADF test fail to reject and the KPSS test reject (Perron 1989), which is exactly the pattern in levels above. Ignoring the shifts could lead us to treat inflation as having a unit root when it may instead be reverting to a slowly changing level. We don't use PELT for unemployment or the bill rate. Their quarter-to-quarter changes are small relative to their slow swings, so even after the same rescaling PELT splits them into `r min(ar_n_other) + 1` to `r max(ar_n_other) + 1` segments, which describes persistence rather than separate regimes.
 
 \needspace{16\baselineskip}
 
@@ -179,7 +183,7 @@ ar_ev  <- function(v, form) paste0(ar_f(ar_g(v, form, "adf")), ", lag ", ar_g(v,
                                 " (", ar_dec(ar_g(v, form, "adf_reject")), ")")
 
 tibble(
-  Series = c("Inflation", "Unemployment", "T-bill rate"),
+  Series = c("CPI inflation", "Unemployment", "Treasury bill rate"),
   `ADF evidence` = sapply(names(ar_series_labels), function(v)
     paste0("Level ", ar_ev(v, "Level"), ". Difference ",
            ar_ev(v, "First difference"), ".")),
@@ -191,7 +195,7 @@ tibble(
            ar_f(ar_g(v, "First difference", "kpss"), 3), " (",
            ar_dec(ar_g(v, "First difference", "kpss_reject")), ").")),
   `Structural-change evidence` = c(
-    paste(n_scaled, "mean breaks after rescaling. Low early 1960s, high 1973–81, lower after 1981."),
+    paste(ar_n_scaled, "mean breaks after rescaling. Low early 1960s, high 1973–81, lower after 1981."),
     "No discrete regimes. Long cyclical swings.",
     "No discrete regimes. Rises with inflation, 1979–82 spike."),
   Classification = c("Unresolved", "$I(1)$", "$I(1)$")
@@ -199,7 +203,7 @@ tibble(
   kable()
 ```
 
-**Classification.** We classify unemployment and the Treasury bill rate as $I(1)$. The ADF test never rejects, differencing removes the persistence, and their lag-1 autocorrelations of `r ar_f(acf_at("Unemployment", 1))` and `r ar_f(acf_at("Treasury", 1))` decay only slowly, so a unit root is the simpler description even though the KPSS evidence is weak. Both rates are bounded in the long run, so we read $I(1)$ as a description of their behavior over this sample rather than a claim about their true process. We classify inflation as unresolved. Its unit-root tests look like those of the two rates, but its persistence is much lower, with a lag-1 autocorrelation of `r ar_f(acf_at("Inflation", 1))` that falls to `r ar_f(acf_at("Inflation", 8))` by lag 8, and its mean shifts at identifiable dates that group into three broad regimes, a low early 1960s, a high 1973–81 and a lower level after 1981. A series that is stationary around a shifting mean produces the same test results, while the two rates move too persistently for a few mean shifts to explain them. That is why the AR models in 4.4.3 and 4.4.4 are worth comparing against the gap models in 4.4.5, since the AR models impose one fixed long-run mean and the gap models track a local one. The forecasts will show which description of inflation works better out of sample.
+**Classification.** We classify unemployment and the Treasury bill rate as $I(1)$. The ADF test never rejects, differencing removes the persistence, and their lag-1 autocorrelations of `r ar_f(ar_acf_at("Unemployment", 1))` and `r ar_f(ar_acf_at("Treasury", 1))` decay only slowly, so a unit root is the simpler description even though the KPSS evidence is weak. Both rates are bounded in the long run, so we read $I(1)$ as a description of their behavior over this sample rather than a claim about their true process. We classify inflation as unresolved. Its unit-root tests look like those of the two rates, but its persistence is much lower, with a lag-1 autocorrelation of `r ar_f(ar_acf_at("Inflation", 1))` that falls to `r ar_f(ar_acf_at("Inflation", 8))` by lag 8, and its mean shifts at identifiable dates that group into three broad regimes, a low early 1960s, a high 1973–81 and a lower level after 1981. A series that is stationary around a shifting mean produces the same test results, while the two rates move too persistently for a few mean shifts to explain them. That is why the AR models in 4.4.3 and 4.4.4 are worth comparing against the gap models in 4.4.5, since the AR models impose one fixed long-run mean and the gap models track a local one. The forecasts will show which description of inflation works better out of sample.
 
 ## 4.4.1 Random-walk model
 
@@ -238,20 +242,20 @@ Each new quarter moves the local mean only 5% of the way toward current inflatio
 
 ```{r ariel-tau-checks}
 # Guide example: previous tau 3.0, current inflation 5.0 -> tau 3.1, gap 1.9
-ex_tau <- 0.95 * 3.0 + 0.05 * 5.0
-stopifnot(isTRUE(all.equal(ex_tau, 3.1)), isTRUE(all.equal(5.0 - ex_tau, 1.9)))
+ar_ex_tau <- 0.95 * 3.0 + 0.05 * 5.0
+stopifnot(isTRUE(all.equal(ar_ex_tau, 3.1)), isTRUE(all.equal(5.0 - ar_ex_tau, 1.9)))
 
 # One-sidedness: tau computed on data through 1999Q4 equals the full-sample
 # tau over the same quarters, so tau_T never uses information after T.
-hist_sample <- ar_quarterly |> filter(date <= as.Date("2019-12-01"))
-full_tau    <- local_mean(hist_sample$Inflation)
-origin_tau  <- local_mean(ar_initial$Inflation)
-one_sided   <- isTRUE(all.equal(origin_tau, full_tau[seq_along(origin_tau)]))
-stopifnot(one_sided)
+ar_hist_sample <- ar_quarterly |> filter(date <= as.Date("2019-12-01"))
+ar_full_tau    <- local_mean(ar_hist_sample$Inflation)
+ar_origin_tau  <- local_mean(ar_initial$Inflation)
+ar_one_sided   <- identical(ar_origin_tau, ar_full_tau[seq_along(ar_origin_tau)])
+stopifnot(ar_one_sided)
 
-lm_hist <- add_local_mean(hist_sample)
-tau_at  <- function(qtr) lm_hist$tau[lm_hist$Quarter == qtr]
-gap_at  <- function(qtr) lm_hist$gap[lm_hist$Quarter == qtr]
+ar_lm_hist <- add_local_mean(ar_hist_sample)
+ar_tau_at  <- function(qtr) ar_lm_hist$tau[ar_lm_hist$Quarter == qtr]
+ar_gap_at  <- function(qtr) ar_lm_hist$gap[ar_lm_hist$Quarter == qtr]
 ```
 
 The recursion is one-sided because $\tau_t$ depends only on $\pi_t$ and earlier values. At each forecast origin $T$, `add_local_mean()` runs the update from 1960Q1 through $T$ on the origin's own sample, so $\tau_T$ and $g_T$ use nothing after $T$. As a check, the local mean computed from data through 1999Q4 matches the 1960Q1–1999Q4 portion of the local mean computed through 2019Q4 exactly. The function also reproduces the guide's example, where a previous local mean of 3.0 and current inflation of 5.0 give $\tau_t=3.1$ and $g_t=1.9$.
@@ -259,7 +263,7 @@ The recursion is one-sided because $\tau_t$ depends only on $\pi_t$ and earlier 
 ```{r fig-ariel-tau}
 #| fig-cap: "Inflation and its exponentially smoothed local mean (top), and the inflation gap (bottom), 1960Q1–2019Q4. Values through any origin T are the ones available at T."
 #| fig-height: 4.4
-lm_hist |>
+ar_lm_hist |>
   transmute(date,
             `Inflation and local mean` = Inflation,
             tau,
@@ -282,7 +286,7 @@ lm_hist |>
        subtitle = "Red line: local mean. Dotted line: first forecast origin, 1999Q4")
 ```
 
-@fig-ariel-tau shows how the local mean behaves. It climbs from `r ar_f(tau_at("1965Q1"), 1)`% in 1965Q1 to a peak of `r ar_f(max(lm_hist$tau), 1)`% in `r lm_hist$Quarter[which.max(lm_hist$tau)]`, then declines slowly to `r ar_f(tau_at("1999Q4"), 1)`% at the first forecast origin and `r ar_f(tau_at("2019Q4"), 1)`% by 2019Q4. It lags turning points by several years, since the weight on new data is small. For example, the gap is `r ar_f(gap_at("1980Q1"), 1)` points in 1980Q1, when inflation surged well above the slowly rising local mean, and the local mean is still above inflation for much of the 1980s. Through the 1990s inflation is lower and steadier than the local mean, so the gap is mostly negative while the local mean drifts down to meet it. By the 2000s the gap is centered close to zero, with an average of `r ar_f(mean(lm_hist$gap[year(lm_hist$date) >= 2000]))` over 2000Q1–2019Q4. The gap is also less persistent than inflation itself. Its lag-1 autocorrelation over 1960Q1–1999Q4 is `r ar_f(acf(add_local_mean(ar_initial)$gap, lag.max = 1, plot = FALSE)$acf[2])`, compared with `r ar_f(acf_at("Inflation", 1))` for inflation.
+@fig-ariel-tau shows how the local mean behaves. It climbs from `r ar_f(ar_tau_at("1965Q1"), 1)`% in 1965Q1 to a peak of `r ar_f(max(ar_lm_hist$tau), 1)`% in `r ar_lm_hist$Quarter[which.max(ar_lm_hist$tau)]`, then declines slowly to `r ar_f(ar_tau_at("1999Q4"), 1)`% at the first forecast origin and `r ar_f(ar_tau_at("2019Q4"), 1)`% by 2019Q4. It lags turning points by several years, since the weight on new data is small. For example, the gap is `r ar_f(ar_gap_at("1980Q1"), 1)` points in 1980Q1, when inflation surged well above the slowly rising local mean, and the local mean is still above inflation for much of the 1980s. Through the 1990s inflation is lower and steadier than the local mean, so the gap is mostly negative while the local mean drifts down to meet it. By the 2000s the gap is centered close to zero, with an average of `r ar_f(mean(ar_lm_hist$gap[year(ar_lm_hist$date) >= 2000]))` over 2000Q1–2019Q4. The gap is also less persistent than inflation itself. Its lag-1 autocorrelation over 1960Q1–1999Q4 is `r ar_f(acf(add_local_mean(ar_initial)$gap, lag.max = 1, plot = FALSE)$acf[2])`, compared with `r ar_f(ar_acf_at("Inflation", 1))` for inflation.
 
 The gap AR (4.4.6) and the fixed-persistence forecast (4.4.7) call `add_local_mean()` on each origin's sample and read $\tau_T$ and $g_T$ from the last row. Both forecasts hold the local mean at $\tau_T$, since the future inflation needed to update it isn't observed yet.
 
@@ -295,7 +299,7 @@ ar_origins <- seq(as.Date("1999-12-01"), as.Date("2019-09-01"), by = "3 months")
 ar_horizons <- c(1, 4, 8)
 ar_last_target <- as.Date("2019-12-01")
 
-rw_fc <- bind_rows(lapply(ar_origins, function(T0) {
+ar_rw_fc <- bind_rows(lapply(ar_origins, function(T0) {
   data_T <- ar_quarterly |> filter(date <= T0)       # information through T only
   fc_rw(data_T) |>
     filter(h %in% ar_horizons) |>
@@ -308,9 +312,9 @@ rw_fc <- bind_rows(lapply(ar_origins, function(T0) {
             model = "Random walk", forecast, actual,
             error = actual - forecast)
 
-stopifnot(identical(as.integer(table(rw_fc$h)), c(80L, 77L, 73L)))
+stopifnot(identical(as.integer(table(ar_rw_fc$h)), c(80L, 77L, 73L)))
 dir.create("outputs", showWarnings = FALSE)
-write_csv(rw_fc, "outputs/forecasts_rw.csv")
+write_csv(ar_rw_fc, "outputs/forecasts_rw.csv")
 
 # Four-quarter-average benchmark (4.4.2), computed here only for the
 # relative-RMSE column. The combined table uses the 4.4.2 implementation.
@@ -321,15 +325,19 @@ ar_avg4 <- ar_quarterly |>
 
 # Cross-check against the 4.4.2 forecasts once they're saved in the shared
 # format (origin, target, h, model, forecast). Rendering stops on a mismatch.
-bench_file <- "outputs/forecasts_4q.csv"
-if (file.exists(bench_file)) {
-  chk <- read_csv(bench_file, show_col_types = FALSE) |>
+ar_bench_file <- "outputs/forecasts_4q.csv"
+if (file.exists(ar_bench_file)) {
+  ar_chk <- read_csv(ar_bench_file, show_col_types = FALSE) |>
     select(origin, forecast) |>          # same forecast at every horizon
     inner_join(ar_avg4, by = "origin")
-  stopifnot(nrow(chk) > 0, isTRUE(all.equal(chk$forecast, chk$ar_avg4)))
+  stopifnot(nrow(ar_chk) > 0, isTRUE(all.equal(ar_chk$forecast, ar_chk$ar_avg4)))
+} else {
+  # Printed to the render console, not the PDF.
+  cat("NOTE: ", ar_bench_file, " not found, so the 4Q benchmark cross-check ",
+      "did not run.\n", sep = "", file = stderr())
 }
 
-rw_acc <- rw_fc |>
+ar_rw_acc <- ar_rw_fc |>
   left_join(ar_avg4, by = "origin") |>
   group_by(h) |>
   summarise(n = n(),
@@ -342,36 +350,36 @@ rw_acc <- rw_fc |>
          sqrt_h = RMSE[h == 1] * sqrt(h))   # RMSE implied by a random walk
 
 # RMSE excluding 2008-2009 targets, as a robustness check on the sqrt(h) point
-rmse_ex0809 <- rw_fc |>
+ar_rmse_ex0809 <- ar_rw_fc |>
   filter(!substr(target, 1, 4) %in% c("2008", "2009")) |>
   group_by(h) |>
   summarise(RMSE = sqrt(mean(error^2)), .groups = "drop")
 
-rw_acc |>
+ar_rw_acc |>
   transmute(Horizon = h, `Target period` = paste0(first, "–", last),
             `$n_h$` = n, RMSE = ar_f(RMSE), `Relative RMSE` = ar_f(rRMSE),
             MAE = ar_f(MAE), `Mean error` = ar_f(ME)) |>
   kable(align = "rlrrrrr",
         caption = "Random-walk forecast accuracy, targets through 2019Q4.")
 
-ar_ra <- function(hh, col) rw_acc[[col]][rw_acc$h == hh]
-ar_rx <- function(hh) rmse_ex0809$RMSE[rmse_ex0809$h == hh]
+ar_ra <- function(hh, col) ar_rw_acc[[col]][ar_rw_acc$h == hh]
+ar_rx <- function(hh) ar_rmse_ex0809$RMSE[ar_rmse_ex0809$h == hh]
 
 # Random-walk errors telescope: each is pi_{T+h} - pi_T, so their sum is the
 # last h targets minus the first h ar_origins.
-telescoped <- sapply(ar_horizons, function(hh) {
-  d <- rw_fc |> filter(h == hh)
+ar_telescoped <- sapply(ar_horizons, function(hh) {
+  d <- ar_rw_fc |> filter(h == hh)
   (sum(tail(d$actual, hh)) - sum(head(d$forecast, hh))) / nrow(d)
 })
-stopifnot(isTRUE(all.equal(telescoped, rw_acc$ME)))
-pi_q <- function(qtr) ar_quarterly$Inflation[ar_quarterly$Quarter == qtr]
-ar_big <- rw_fc |> filter(h == 1) |> slice_max(abs(error), n = 1)
-ar_one_step <- rw_fc |> filter(h == 1)
-share_0809 <- with(ar_one_step, sum(error[substr(target, 1, 4) %in% c("2008", "2009")]^2) / sum(error^2))
+stopifnot(isTRUE(all.equal(ar_telescoped, ar_rw_acc$ME)))
+ar_pi_q <- function(qtr) ar_quarterly$Inflation[ar_quarterly$Quarter == qtr]
+ar_big <- ar_rw_fc |> filter(h == 1) |> slice_max(abs(error), n = 1)
+ar_one_step <- ar_rw_fc |> filter(h == 1)
+ar_share_0809 <- with(ar_one_step, sum(error[substr(target, 1, 4) %in% c("2008", "2009")]^2) / sum(error^2))
 ```
 
 We generate the random-walk forecasts at every origin from 1999Q4 to 2019Q3, keep $h=1,4,8$, and evaluate them against targets through 2019Q4, which gives `r ar_ra(1,"n")`, `r ar_ra(4,"n")` and `r ar_ra(8,"n")` forecast errors, matching the counts in the guide. We save the forecasts to `outputs/forecasts_rw.csv` with one row per origin, target, horizon and model, so we can collate them with the other models. We compute the four-quarter-average benchmark here only for the relative RMSE below, and the combined table uses the implementation from 4.4.2.
 
-Relative RMSE against the four-quarter-average benchmark is `r ar_f(ar_ra(1,"rRMSE"))` at $h=1$, `r ar_f(ar_ra(4,"rRMSE"))` at $h=4$ and `r ar_f(ar_ra(8,"rRMSE"))` at $h=8$, so the random walk's RMSE runs `r sprintf("%.0f", 100 * (min(rw_acc$rRMSE) - 1))` to `r sprintf("%.0f", 100 * (max(rw_acc$rRMSE) - 1))` percent above the benchmark's, with the gap widest at $h=`r rw_acc$h[which.max(rw_acc$rRMSE)]`$. In levels, RMSE is `r ar_f(ar_ra(1,"RMSE"))` at $h=1$, `r ar_f(ar_ra(4,"RMSE"))` at $h=4$ and `r ar_f(ar_ra(8,"RMSE"))` at $h=8$, so accuracy barely changes with the horizon. The random walk carries the full noise of $\pi_T$ into every forecast, so even a one-quarter-ahead forecast inherits the volatility of the latest observation. The largest one-step error is `r ar_f(ar_big$error, 1)` points, for `r ar_big$target`, when the forecast carried forward `r ar_big$origin` inflation of `r ar_f(ar_big$forecast, 1)`% and actual inflation was `r ar_f(ar_big$actual, 1)`%. RMSE runs well above MAE at every horizon, `r ar_f(ar_ra(1,"RMSE"))` against `r ar_f(ar_ra(1,"MAE"))` at $h=1$, so a few very large errors drive much of the RMSE. Targets in 2008 and 2009 account for `r round(100 * share_0809)`% of the squared one-step error, even though they're only 8 of the 80 quarters. Mean errors are close to zero (`r ar_f(ar_ra(1,"ME"))`, `r ar_f(ar_ra(4,"ME"))` and `r ar_f(ar_ra(8,"ME"))`), but for a random walk this is mechanical rather than evidence of no bias. Each error is the change in inflation from the origin to the target, so the errors telescope. At $h=1$ their mean is $(\pi_{2019Q4}-\pi_{1999Q4})/80=(`r ar_f(pi_q("2019Q4"))`-`r ar_f(pi_q("1999Q4"))`)/80$, and at $h=4$ and $h=8$ the same cancellation leaves only the last $h$ targets and the first $h$ origins. A mean error near zero only says that inflation ended the evaluation sample close to where it started.
+Relative RMSE against the four-quarter-average benchmark is `r ar_f(ar_ra(1,"rRMSE"))` at $h=1$, `r ar_f(ar_ra(4,"rRMSE"))` at $h=4$ and `r ar_f(ar_ra(8,"rRMSE"))` at $h=8$, so the random walk's RMSE runs `r sprintf("%.0f", 100 * (min(ar_rw_acc$rRMSE) - 1))` to `r sprintf("%.0f", 100 * (max(ar_rw_acc$rRMSE) - 1))` percent above the benchmark's, with the gap widest at $h=`r ar_rw_acc$h[which.max(ar_rw_acc$rRMSE)]`$. In levels, RMSE is `r ar_f(ar_ra(1,"RMSE"))` at $h=1$, `r ar_f(ar_ra(4,"RMSE"))` at $h=4$ and `r ar_f(ar_ra(8,"RMSE"))` at $h=8$, so accuracy barely changes with the horizon. The random walk carries the full noise of $\pi_T$ into every forecast, so even a one-quarter-ahead forecast inherits the volatility of the latest observation. The largest one-step error is `r ar_f(ar_big$error, 1)` points, for `r ar_big$target`, when the forecast carried forward `r ar_big$origin` inflation of `r ar_f(ar_big$forecast, 1)`% and actual inflation was `r ar_f(ar_big$actual, 1)`%. RMSE runs well above MAE at every horizon, `r ar_f(ar_ra(1,"RMSE"))` against `r ar_f(ar_ra(1,"MAE"))` at $h=1$, so a few very large errors drive much of the RMSE. Targets in 2008 and 2009 account for `r round(100 * ar_share_0809)`% of the squared one-step error, even though they're only 8 of the 80 quarters. Mean errors are close to zero (`r ar_f(ar_ra(1,"ME"))`, `r ar_f(ar_ra(4,"ME"))` and `r ar_f(ar_ra(8,"ME"))`), but for a random walk this is mechanical rather than evidence of no bias. Each error is the change in inflation from the origin to the target, so the errors telescope. At $h=1$ their mean is $(\pi_{2019Q4}-\pi_{1999Q4})/80=(`r ar_f(ar_pi_q("2019Q4"))`-`r ar_f(ar_pi_q("1999Q4"))`)/80\approx`r ar_f((ar_pi_q("2019Q4") - ar_pi_q("1999Q4")) / 80)`$, and at $h=4$ and $h=8$ the same cancellation leaves only the last $h$ targets and the first $h$ origins. A mean error near zero only says that inflation ended the evaluation sample close to where it started.
 
 A random walk's $h$-step forecast error is the sum of $h$ independent shocks, so its RMSE should grow roughly as $\sqrt{h}$. From `r ar_f(ar_ra(1,"RMSE"))` at $h=1$, that implies about `r ar_f(ar_ra(4,"sqrt_h"))` at $h=4$ and `r ar_f(ar_ra(8,"sqrt_h"))` at $h=8$, far above the `r ar_f(ar_ra(4,"RMSE"))` and `r ar_f(ar_ra(8,"RMSE"))` we observe. The comparison isn't exact, since the targets overlap across origins and the 2008–09 errors reach every horizon, but dropping the 2008 and 2009 targets still leaves RMSE at `r ar_f(ar_rx(1))`, `r ar_f(ar_rx(4))` and `r ar_f(ar_rx(8))`, nowhere near $\sqrt{h}$ growth. The variance of the $h$-quarter change in inflation levels off rather than accumulating, so most quarter-to-quarter movement is transitory, which rules out a pure random walk. It doesn't settle the $I(0)$ versus $I(1)$ question from 4.2, though, since a slowly drifting $I(1)$ level plus large temporary noise produces the same flat profile. The local mean and gap in 4.4.5 separate exactly those two components, so the test of this reading is how the gap AR (4.4.6) and fixed-persistence forecasts (4.4.7) compare with the random walk and the AR models.
