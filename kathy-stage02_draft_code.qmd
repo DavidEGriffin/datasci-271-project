@@ -113,10 +113,7 @@ fc_rw <- function(data, H) {
 }
 
 ### Model 2: 4-quarter-average benchmarks
-forecast_4q <- function(data, H) {
-  x <- data$Inflation
-  mean(tail(x, 4))
-}
+
 
 
 ### Model 3: AR(p) model
@@ -197,7 +194,7 @@ forecast_fixed_gap <- function(data, H, rho = 0.46) {
 # all models
 models <- list(
   #"Random walk" = x,
-  "Four-quarter average" = forecast_4q,
+  #"Four-quarter average" = x,
   "Selected AR(p)/AR(3)" = forecast_arp,
   #"Direct AR" = x,
   #"Gap AR" = x,
