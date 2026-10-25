@@ -2,8 +2,9 @@
 #
 # Shared interface for every forecasting model (see R/forecast-framework.R)
 #   fc_<model>(data, H)
-#   data : rows 1960Q1 through the forecast origin T, ordered by quarter,
-#          with an `Inflation` column. Nothing after T is included.
+#   data : the team's quarterly tsibble (R/data.R), indexed by Quarter,
+#          rows 1960 Q1 through the forecast origin T, with an `Inflation`
+#          column. Nothing after T is included.
 #   H    : forecast horizon, an integer
 #   returns a single number, the forecast of inflation in T + H
 # run_expanding_window() calls each fc_ function at every origin with

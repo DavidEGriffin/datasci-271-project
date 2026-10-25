@@ -7,17 +7,16 @@ read_quarterly <- function(series, name) {
     mutate(observation_date = tsibble::yearmonth(observation_date)) |>
     tsibble::as_tsibble(index = observation_date) |>
     filter(month(observation_date) %in% c(3, 6, 9, 12)) |>
-    as_tibble() |>
+    mutate(Quarter = tsibble::yearquarter(observation_date)) |>
+    tsibble::as_tsibble(index = Quarter) |>
     transmute(date = as.Date(observation_date), !!name := .data[[series]])
 }
 
 quarterly_data <- read_quarterly("CPIAUCSL", "CPI") |>
-  inner_join(read_quarterly("UNRATE", "Unemployment"), by = "date") |>
-  inner_join(read_quarterly("TB3MS",  "Treasury"),     by = "date") |>
-  arrange(date) |>
-  mutate(Inflation = 400 * log(CPI / lag(CPI)),
-         Quarter   = paste0(year(date), "Q", quarter(date))) |>
-  filter(date >= as.Date("1960-03-01")) |>
-  select(date, Quarter, CPI, Inflation, Unemployment, Treasury)
+  inner_join(read_quarterly("UNRATE", "Unemployment"), by = c("Quarter", "date")) |>
+  inner_join(read_quarterly("TB3MS",  "Treasury"),     by = c("Quarter", "date")) |>
+  mutate(Inflation = 400 * log(CPI / lag(CPI))) |>
+  tsibble::filter_index("1960 Q1" ~ .) |>
+  select(Quarter, date, CPI, Inflation, Unemployment, Treasury)
 
-initial_data <- quarterly_data |> filter(date <= as.Date("1999-12-01"))
+initial_data <- quarterly_data |> tsibble::filter_index(~ "1999 Q4")

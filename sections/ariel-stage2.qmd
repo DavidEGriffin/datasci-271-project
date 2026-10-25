@@ -24,8 +24,9 @@ source("R/data.R")
 
 ar_f    <- function(x, d = 2) formatC(x, format = "f", digits = d)
 
-# Quarterly panel: the team's 4.3 data objects from R/data.R (columns: date,
-# Quarter as "1999Q4", CPI, Inflation, Unemployment, Treasury).
+# Quarterly panel: the team's 4.3 data objects from R/data.R, tsibbles indexed
+# by Quarter (yearquarter), with columns date, CPI, Inflation, Unemployment
+# and Treasury.
 ar_quarterly <- quarterly_data
 ar_initial   <- initial_data
 stopifnot(nrow(ar_initial) == 160)
@@ -75,6 +76,7 @@ ar_join_and <- function(x) if (length(x) < 2) x else
 #| fig-cap: "The three series, 1960Q1–1999Q4. Dashed red lines in the inflation panel are PELT segment means after rescaling inflation by its noise scale."
 #| fig-height: 4.6
 ar_initial |>
+  as_tibble() |>
   pivot_longer(c(Inflation, Unemployment, Treasury), names_to = "series") |>
   mutate(series = factor(series, names(ar_series_labels), ar_series_labels)) |>
   ggplot(aes(date, value)) +
@@ -238,8 +240,8 @@ ar_one_sided   <- identical(ar_origin_tau, ar_full_tau[seq_along(ar_origin_tau)]
 stopifnot(ar_one_sided)
 
 ar_lm_hist <- add_local_mean(ar_hist_sample)
-ar_tau_at  <- function(qtr) ar_lm_hist$tau[ar_lm_hist$Quarter == qtr]
-ar_gap_at  <- function(qtr) ar_lm_hist$gap[ar_lm_hist$Quarter == qtr]
+ar_tau_at  <- function(qtr) ar_lm_hist$tau[ar_lm_hist$Quarter == tsibble::yearquarter(qtr)]
+ar_gap_at  <- function(qtr) ar_lm_hist$gap[ar_lm_hist$Quarter == tsibble::yearquarter(qtr)]
 ```
 
 The recursion is one-sided because $\tau_t$ depends only on $\pi_t$ and earlier values. At each forecast origin $T$, `add_local_mean()` runs the update from 1960Q1 through $T$ on the origin's own sample, so $\tau_T$ and $g_T$ use nothing after $T$. As a check, the local mean computed from data through 1999Q4 matches the 1960Q1–1999Q4 portion of the local mean computed through 2019Q4 exactly. The function also reproduces the guide's example, where a previous local mean of 3.0 and current inflation of 5.0 give $\tau_t=3.1$ and $g_t=1.9$.
@@ -248,6 +250,7 @@ The recursion is one-sided because $\tau_t$ depends only on $\pi_t$ and earlier 
 #| fig-cap: "Inflation and its exponentially smoothed local mean (top), and the inflation gap (bottom), 1960Q1–2019Q4. Values through any origin T are the ones available at T."
 #| fig-height: 4.4
 ar_lm_hist |>
+  as_tibble() |>
   transmute(date,
             `Inflation and local mean` = Inflation,
             tau,
@@ -270,7 +273,7 @@ ar_lm_hist |>
        subtitle = "Red line: local mean. Dotted line: first forecast origin, 1999Q4")
 ```
 
-@fig-ariel-tau shows how the local mean behaves. It climbs from `r ar_f(ar_tau_at("1965Q1"), 1)`% in 1965Q1 to a peak of `r ar_f(max(ar_lm_hist$tau), 1)`% in `r ar_lm_hist$Quarter[which.max(ar_lm_hist$tau)]`, then declines slowly to `r ar_f(ar_tau_at("1999Q4"), 1)`% at the first forecast origin and `r ar_f(ar_tau_at("2019Q4"), 1)`% by 2019Q4. It lags turning points by several years, since the weight on new data is small. For example, the gap is `r ar_f(ar_gap_at("1980Q1"), 1)` points in 1980Q1, when inflation surged well above the slowly rising local mean, and the local mean is still above inflation for much of the 1980s. Through the 1990s inflation is lower and steadier than the local mean, so the gap is mostly negative while the local mean drifts down to meet it. By the 2000s the gap is centered close to zero, with an average of `r ar_f(mean(ar_lm_hist$gap[year(ar_lm_hist$date) >= 2000]))` over 2000Q1–2019Q4. The gap is also less persistent than inflation itself. Its lag-1 autocorrelation over 1960Q1–1999Q4 is `r ar_f(acf(add_local_mean(ar_initial)$gap, lag.max = 1, plot = FALSE)$acf[2])`, compared with `r ar_f(ar_acf_at("Inflation", 1))` for inflation.
+@fig-ariel-tau shows how the local mean behaves. It climbs from `r ar_f(ar_tau_at("1965 Q1"), 1)`% in 1965Q1 to a peak of `r ar_f(max(ar_lm_hist$tau), 1)`% in `r format(ar_lm_hist$Quarter[which.max(ar_lm_hist$tau)])`, then declines slowly to `r ar_f(ar_tau_at("1999 Q4"), 1)`% at the first forecast origin and `r ar_f(ar_tau_at("2019 Q4"), 1)`% by 2019Q4. It lags turning points by several years, since the weight on new data is small. For example, the gap is `r ar_f(ar_gap_at("1980 Q1"), 1)` points in 1980Q1, when inflation surged well above the slowly rising local mean, and the local mean is still above inflation for much of the 1980s. Through the 1990s inflation is lower and steadier than the local mean, so the gap is mostly negative while the local mean drifts down to meet it. By the 2000s the gap is centered close to zero, with an average of `r ar_f(mean(ar_lm_hist$gap[year(ar_lm_hist$date) >= 2000]))` over 2000Q1–2019Q4. The gap is also less persistent than inflation itself. Its lag-1 autocorrelation over 1960Q1–1999Q4 is `r ar_f(acf(add_local_mean(ar_initial)$gap, lag.max = 1, plot = FALSE)$acf[2])`, compared with `r ar_f(ar_acf_at("Inflation", 1))` for inflation.
 
 The gap AR (4.4.6) and the fixed-persistence forecast (4.4.7) call `add_local_mean()` on each origin's sample and read $\tau_T$ and $g_T$ from the last row. Both forecasts hold the local mean at $\tau_T$, since the future inflation needed to update it isn't observed yet.
 
@@ -296,6 +299,7 @@ write_csv(ar_rw_fc, "outputs/forecasts_rw.csv")
 # Four-quarter-average benchmark (4.4.2), computed here only for the
 # relative-RMSE column. The combined table uses the 4.4.2 implementation.
 ar_avg4 <- ar_quarterly |>
+  as_tibble() |>
   mutate(ar_avg4 = (Inflation + lag(Inflation) + lag(Inflation, 2) +
                    lag(Inflation, 3)) / 4) |>
   transmute(origin = Quarter, ar_avg4)
@@ -305,7 +309,7 @@ ar_avg4 <- ar_quarterly |>
 ar_bench_file <- "outputs/forecasts_4q.csv"
 if (file.exists(ar_bench_file)) {
   ar_chk <- read_csv(ar_bench_file, show_col_types = FALSE) |>
-    select(origin, forecast) |>          # same forecast at every horizon
+    transmute(origin = tsibble::yearquarter(origin), forecast) |>          # same forecast at every horizon
     inner_join(ar_avg4, by = "origin")
   stopifnot(nrow(ar_chk) > 0, isTRUE(all.equal(ar_chk$forecast, ar_chk$ar_avg4)))
 } else {
@@ -328,7 +332,7 @@ ar_rw_acc <- ar_rw_fc |>
 
 # RMSE excluding 2008-2009 targets, as a robustness check on the sqrt(h) point
 ar_rmse_ex0809 <- ar_rw_fc |>
-  filter(!substr(target, 1, 4) %in% c("2008", "2009")) |>
+  filter(!year(as.Date(target)) %in% c(2008, 2009)) |>
   group_by(h) |>
   summarise(RMSE = sqrt(mean(error^2)), .groups = "drop")
 
@@ -349,14 +353,14 @@ ar_telescoped <- sapply(ar_horizons, function(hh) {
   (sum(tail(d$actual, hh)) - sum(head(d$forecast, hh))) / nrow(d)
 })
 stopifnot(isTRUE(all.equal(ar_telescoped, ar_rw_acc$ME)))
-ar_pi_q <- function(qtr) ar_quarterly$Inflation[ar_quarterly$Quarter == qtr]
+ar_pi_q <- function(qtr) ar_quarterly$Inflation[ar_quarterly$Quarter == tsibble::yearquarter(qtr)]
 ar_big <- ar_rw_fc |> filter(h == 1) |> slice_max(abs(error), n = 1)
 ar_one_step <- ar_rw_fc |> filter(h == 1)
-ar_share_0809 <- with(ar_one_step, sum(error[substr(target, 1, 4) %in% c("2008", "2009")]^2) / sum(error^2))
+ar_share_0809 <- with(ar_one_step, sum(error[year(as.Date(target)) %in% c(2008, 2009)]^2) / sum(error^2))
 ```
 
 We generate the random-walk forecasts at every origin from 1999Q4 to 2019Q3, keep $h=1,4,8$, and evaluate them against targets through 2019Q4, which gives `r ar_ra(1,"n")`, `r ar_ra(4,"n")` and `r ar_ra(8,"n")` forecast errors, matching the counts in the guide. We save the forecasts to `outputs/forecasts_rw.csv` with one row per origin, target, horizon and model, so we can collate them with the other models. We compute the four-quarter-average benchmark here only for the relative RMSE below, and the combined table uses the implementation from 4.4.2.
 
-Relative RMSE against the four-quarter-average benchmark is `r ar_f(ar_ra(1,"rRMSE"))` at $h=1$, `r ar_f(ar_ra(4,"rRMSE"))` at $h=4$ and `r ar_f(ar_ra(8,"rRMSE"))` at $h=8$, so the random walk's RMSE runs `r sprintf("%.0f", 100 * (min(ar_rw_acc$rRMSE) - 1))` to `r sprintf("%.0f", 100 * (max(ar_rw_acc$rRMSE) - 1))` percent above the benchmark's, with the gap widest at $h=`r ar_rw_acc$h[which.max(ar_rw_acc$rRMSE)]`$. In levels, RMSE is `r ar_f(ar_ra(1,"RMSE"))` at $h=1$, `r ar_f(ar_ra(4,"RMSE"))` at $h=4$ and `r ar_f(ar_ra(8,"RMSE"))` at $h=8$, so accuracy barely changes with the horizon. The random walk carries the full noise of $\pi_T$ into every forecast, so even a one-quarter-ahead forecast inherits the volatility of the latest observation. The largest one-step error is `r ar_f(ar_big$error, 1)` points, for `r ar_big$target`, when the forecast carried forward `r ar_big$origin` inflation of `r ar_f(ar_big$forecast, 1)`% and actual inflation was `r ar_f(ar_big$actual, 1)`%. RMSE runs well above MAE at every horizon, `r ar_f(ar_ra(1,"RMSE"))` against `r ar_f(ar_ra(1,"MAE"))` at $h=1$, so a few very large errors drive much of the RMSE. Targets in 2008 and 2009 account for `r round(100 * ar_share_0809)`% of the squared one-step error, even though they're only 8 of the 80 quarters. Mean errors are close to zero (`r ar_f(ar_ra(1,"ME"))`, `r ar_f(ar_ra(4,"ME"))` and `r ar_f(ar_ra(8,"ME"))`), but for a random walk this is mechanical rather than evidence of no bias. Each error is the change in inflation from the origin to the target, so the errors telescope. At $h=1$ their mean is $(\pi_{2019Q4}-\pi_{1999Q4})/80=(`r ar_f(ar_pi_q("2019Q4"))`-`r ar_f(ar_pi_q("1999Q4"))`)/80\approx`r ar_f((ar_pi_q("2019Q4") - ar_pi_q("1999Q4")) / 80)`$, and at $h=4$ and $h=8$ the same cancellation leaves only the last $h$ targets and the first $h$ origins. A mean error near zero only says that inflation ended the evaluation sample close to where it started.
+Relative RMSE against the four-quarter-average benchmark is `r ar_f(ar_ra(1,"rRMSE"))` at $h=1$, `r ar_f(ar_ra(4,"rRMSE"))` at $h=4$ and `r ar_f(ar_ra(8,"rRMSE"))` at $h=8$, so the random walk's RMSE runs `r sprintf("%.0f", 100 * (min(ar_rw_acc$rRMSE) - 1))` to `r sprintf("%.0f", 100 * (max(ar_rw_acc$rRMSE) - 1))` percent above the benchmark's, with the gap widest at $h=`r ar_rw_acc$h[which.max(ar_rw_acc$rRMSE)]`$. In levels, RMSE is `r ar_f(ar_ra(1,"RMSE"))` at $h=1$, `r ar_f(ar_ra(4,"RMSE"))` at $h=4$ and `r ar_f(ar_ra(8,"RMSE"))` at $h=8$, so accuracy barely changes with the horizon. The random walk carries the full noise of $\pi_T$ into every forecast, so even a one-quarter-ahead forecast inherits the volatility of the latest observation. The largest one-step error is `r ar_f(ar_big$error, 1)` points, for `r format(ar_big$target)`, when the forecast carried forward `r format(ar_big$origin)` inflation of `r ar_f(ar_big$forecast, 1)`% and actual inflation was `r ar_f(ar_big$actual, 1)`%. RMSE runs well above MAE at every horizon, `r ar_f(ar_ra(1,"RMSE"))` against `r ar_f(ar_ra(1,"MAE"))` at $h=1$, so a few very large errors drive much of the RMSE. Targets in 2008 and 2009 account for `r round(100 * ar_share_0809)`% of the squared one-step error, even though they're only 8 of the 80 quarters. Mean errors are close to zero (`r ar_f(ar_ra(1,"ME"))`, `r ar_f(ar_ra(4,"ME"))` and `r ar_f(ar_ra(8,"ME"))`), but for a random walk this is mechanical rather than evidence of no bias. Each error is the change in inflation from the origin to the target, so the errors telescope. At $h=1$ their mean is $(\pi_{2019Q4}-\pi_{1999Q4})/80=(`r ar_f(ar_pi_q("2019 Q4"))`-`r ar_f(ar_pi_q("1999 Q4"))`)/80\approx`r ar_f((ar_pi_q("2019 Q4") - ar_pi_q("1999 Q4")) / 80)`$, and at $h=4$ and $h=8$ the same cancellation leaves only the last $h$ targets and the first $h$ origins. A mean error near zero only says that inflation ended the evaluation sample close to where it started.
 
 A random walk's $h$-step forecast error is the sum of $h$ independent shocks, so its RMSE should grow roughly as $\sqrt{h}$. From `r ar_f(ar_ra(1,"RMSE"))` at $h=1$, that implies about `r ar_f(ar_ra(4,"sqrt_h"))` at $h=4$ and `r ar_f(ar_ra(8,"sqrt_h"))` at $h=8$, far above the `r ar_f(ar_ra(4,"RMSE"))` and `r ar_f(ar_ra(8,"RMSE"))` we observe. The comparison isn't exact, since the targets overlap across origins and the 2008–09 errors reach every horizon, but dropping the 2008 and 2009 targets still leaves RMSE at `r ar_f(ar_rx(1))`, `r ar_f(ar_rx(4))` and `r ar_f(ar_rx(8))`, nowhere near $\sqrt{h}$ growth. The variance of the $h$-quarter change in inflation levels off rather than accumulating, so most quarter-to-quarter movement is transitory, which rules out a pure random walk. It doesn't settle the $I(0)$ versus $I(1)$ question from 4.2, though, since a slowly drifting $I(1)$ level plus large temporary noise produces the same flat profile. The local mean and gap in 4.4.5 separate exactly those two components, so the test of this reading is how the gap AR (4.4.6) and fixed-persistence forecasts (4.4.7) compare with the random walk and the AR models.
