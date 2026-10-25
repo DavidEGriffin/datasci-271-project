@@ -1,0 +1,81 @@
+## 4.4.2 Four-quarter-average benchmark
+
+The four-quarter-average benchmark is used as a benchmark to be beaten by more complex models. In this naive method, the four most recently observed quarters are averaged to remove seasonal variation, and this average is used as the estimate for all future forecasts. This estimate can be mathematically represented as
+
+$$
+\widehat\pi_{T+h\mid T}^{4Q}
+=\frac14\sum_{j=0}^{3}\pi_{T-j},
+$$
+
+where $T$ is the most recently observed quarter and $h$ is the forecast horizon. We implement the four-quarter-average benchmark with the following R function:
+
+```{r 4q-average}
+fc_4q <- function(data, H) {
+  mean(tail(data$Inflation, 4))
+}
+```
+
+```{r 4q-average-output}
+setwd("..")
+source("R/data.R")
+source("R/forecast-framework.R")
+fc_mine <- run_expanding_window(quarterly_data, list("Four-quarter average" = fc_4q)) |>
+  attach_actuals(quarterly_data)
+
+write_csv(filter(fc_mine, model == "Four-quarter average"), "outputs/forecasts_4q.csv")
+```
+
+## 4.4.6 Gap AR model
+
+The gap AR model forecasts inflation in two parts: the slowly changing local mean $\tau_t$ from 4.4.5, and the inflation gap $g_t=\pi_t-\tau_t$ around it. At each forecast origin, we compute $\tau_t$ and $g_t$ from the origin's own sample and fit an autoregression with an intercept to the gap,
+
+$$
+g_t=a+\sum_{j=1}^{p}\rho_jg_{t-j}+v_t,
+$$
+
+by OLS for each $p\in\{1,2,3,4\}$, keeping the lag order with the lowest BIC. All four regressions use the same estimation sample, starting in the fifth quarter, so their BIC values are comparable. We then forecast the gap iteratively, feeding each forecast back in as a lag,
+
+$$
+\widehat g_{T+k\mid T}=\hat a+\sum_{j=1}^{p}\hat\rho_j\,\widehat g_{T+k-j\mid T},
+\qquad k=1,\dots,h,
+$$
+
+where $\widehat g_{T+k-j\mid T}=g_{T+k-j}$ whenever $k-j\le 0$, and add the current local mean back:
+
+$$
+\widehat\pi_{T+h\mid T}^{GAP}
+=\tau_T+\widehat g_{T+h\mid T}.
+$$
+
+The local mean is held at $\tau_T$ over the forecast period, since the future inflation needed to update it isn't observed yet. Comparing this model with the AR($p$) model shows whether recentering inflation around a slowly changing level improves forecasts. We implement the gap AR model with the following R function, which uses `add_local_mean()` from 4.4.5:
+
+```{r gap-ar}
+fc_gap_ar <- function(data, H, max_p = 4) {
+  d <- add_local_mean(data)
+  g <- d$gap
+  n <- length(g)
+
+  idx  <- (max_p + 1):n                              # common sample for every p
+  lags <- sapply(1:max_p, function(j) g[idx - j])    # column j is g_{t-j}
+  fits <- lapply(1:max_p, function(p) lm(g[idx] ~ lags[, 1:p, drop = FALSE]))
+  p    <- which.min(sapply(fits, BIC))
+  b    <- coef(fits[[p]])                            # a, rho_1, ..., rho_p
+
+  path <- tail(g, p)                                 # g_{T-p+1}, ..., g_T
+  for (k in seq_len(H)) {
+    path <- c(path, b[1] + sum(b[-1] * rev(tail(path, p))))
+  }
+  d$tau[n] + path[length(path)]
+}
+```
+
+```{r gap-ar-output}
+setwd("..")
+source("R/data.R")
+source("R/forecast-framework.R")
+source("R/ariel-functions.R")
+fc_gap <- run_expanding_window(quarterly_data, list("Gap AR" = fc_gap_ar)) |>
+  attach_actuals(quarterly_data)
+
+write_csv(fc_gap, "outputs/forecasts_gap_ar.csv")
+```
