@@ -1,0 +1,229 @@
+## 4.4.3 AR(p) model
+
+The AR($p$) model forecasts inflation using its own past values. Unlike the four-quarter-average benchmark (which gives the forecast at every horizon), the AR($p$) model uses the relationship between current and lagged information to generate forecasts that evolve with the horizon. At each forecast origin, we estimate autoregressive models with lag orders $p\in{1, 2, 3, 4}$ by maximum likelihood and select the model with the lowest Bayesian Information Criterion (BIC). The model is specified as:
+
+$$
+\pi_t =c+\sum_{j=1}^{p}\phi_j\pi_{t-j}+\varepsilon_t
+$$
+where $c$ is the intercept, $\phi_j$ are the autoregressive coefficients, and $\varepsilon_t$ is the error term. All models use the same estimation sample for comparability. Multistep forecasts are generated iteratively using the same estimated coefficients. If the model is stationary, forecasts converge toward its implied long-run mean. We implement the AR($p$) model with the following R function:
+
+```{r ar_p}
+fc_arp <- function(data, H) {
+  x <- data$Inflation
+  # estimate AR(1) through AR(4)
+  models <- lapply(1:4, function(p) {
+    stats::arima(
+      x, 
+      order = c(p, 0, 0), 
+      method = "ML")
+  })
+  # select the model with the lowest BIC
+  bic_values <- sapply(models, BIC)
+  best_model <- models[[which.min(bic_values)]]
+  # forecast the next h quarters
+  stats::predict(best_model, n.ahead = H)$pred[H]
+}
+```
+
+
+```{r ar_p output}
+setwd("..")
+source("R/data.R")
+source(R/forecastframework.R)
+
+fc_arp_results <- run_expanding_window(
+  quarterly_data,
+  list("AR(p)" = fc_arp)
+) |>
+  attach_actuals(quarterly_data)
+
+write_scv(fc_ar_results, "outputs/forecasts_arp.csv")
+```
+
+## 4.4.6 Fixed-persistence gap forecast
+
+The fixed-persistence gap model forecasts inflation using the slowly changing local mean $\tau_t$ from Section 4.4.5 and the inflation gap $g_t = \pi_t-\tau_t$. Following Faust and Wright (2013), we fix the persistence coefficient at 0.46 rather than estimating it at each forecast origin. The forecast is specified as:
+
+$$
+\widehat{\pi}_{T+h\mid T}^{FIX}
+= \tau_T + 0.46^h g_T
+$$
+where $T$ is the most recently observed quarter and $h$ is the forecast horizon. At each expanding-window origin, we calculate the local mean and gap using only the available observations. The local m ean is held at $\tau_T$ over the forecast period, while the inflation gap shrings geometrically toward zero as the horizon increases. Comparing this model with the estimated gap AR model shows whether estimating additional persistence parameters improves forecast accuracy enough to offset their estimation uncertainty. We implement the fixed-persistence gap model with the following R function:
+
+```{r fp_gap}
+fc_fixed_gap <- function(data, H, rho = 0.46) {
+  data <- add_local_mean(data)
+  tau_T <- tail(data$tau, 1)
+  gap_T <- tail(data$gap, 1)
+  
+  forecast <- tau_T + rho^H * gap_T
+  
+  return(as.numeric(forecast))
+}
+```
+
+
+```{r fp_gap_output}
+setwd("..")
+source("R/data.R")
+source("R/forecast-framework.R")
+
+fc_fixedgap <- run_expanding_window(
+  quarterly_data,
+  list("Fixed-persistence gap" = fc_fixed_gap)
+) |>
+  attach_actuals(quarterly_data)
+
+write_csv(fc_fixedgap, "outputs/forecasts_fixed_gap.csv")
+```
+
+# Step 4: Evaluate the forecasts
+
+```{r evaluate}
+# load all saved forecasts
+forecast_files <- list.files(
+  "outputs",
+  pattern = "^forecasts_.*\\.csv$",
+  full.names = TRUE
+)
+forecast_results <- dplyr::bind_rows(
+  lapply(forecast_files, function(f) {
+    readr::read_csv(f, show_col_types = FALSE)
+  })
+)
+# calculate forecast accuracy by model and horizon
+accuracy_results <- forecast_results |>
+  dplyr::group_by(Model, h) |>
+  dplyr::summarise(
+    n_h = dplyr::n(),
+    RMSE = sqrt(mean(Error^2)),
+    MAE = mean(abs(Error)),
+    Mean_error = mean(Error), .groups = "drop"
+  ) 
+# caulate RMSE relative to four-quarter-average benchmark
+benchmark <- accuracy_results |>
+  dplyr::select(h, benchmark_RMSE = RMSE)
+
+accuracy_results <- accuracy_results |>
+  dplyr::left_join(benchmark, by = "h") |>
+  dplyr::mutate(
+    Relative_RMSE = RMSE / benchmark_RMSE
+    ) |>
+      dplyr::arrange(h, RMSE)
+
+# create accuracy table
+accuracy_table <- accuracy_results |>
+  dplyr::transmute(
+    Model = model,
+    Horizon = h,
+    n_h,
+    RMSE,
+    `Relative RMSE` = Relative_RMSE,
+    MAE,
+    `Mean error` = Mean_error
+  )
+
+knitr::kable(
+  accuracy_table,
+  digits = 3,
+  booktabs = TRUE,
+  caption = "Expanding-window forecast accuracy"
+)
+```
+
+**$h=1** The fixed-persistence gap model has the lowest RMSE of `r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==1])`, slightly outperforming the four-quarter-average benchmark(`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Four-quarter average" & accuracy_results$h==1])`). Its relative RMSE of `r sprintf("%.3f", accuracy_results$Relative_RMSE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==1])` is a 1.2% improvement. The two models have identical MAE values of `r sprintf("%.3f", accuracy_results$MAE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==1])`, indicating similar typical forecast errors. The random walk performs worst, with a RMSE of `r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Random walk" & accuracy_results$h==1])`.
+
+**$h=4$** The fixed-persistence gap model again has the lowest RMSE (`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==4])`), outperforming the benchmark (`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Four-quarter average" & accuracy_results$h==4])`) by approximately 6.7%. The gap AR model ranks second with a RMSE of `r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Gap AR" & accuracy_results$h==4])`. The fixed-persistence model also has the lowest MAE (`r sprintf("%.3f", accuracy_results$MAE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==4])`), indicating smaller average absolute errors. Its negative mean error (`r sprintf("%.3f", accuracy_results$Mean_error[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==4])`) suggests a tendency to overpredict inflation.
+
+**$h=8$** The fixed-persistence gap model again has the lowest RMSE (`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==8])`), which is a 8.8% improvement over the benchmark (`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Four-quarter average" & accuracy_results$h==8])`). The gap AR model ranks second with a RMSE of `r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Gap AR" & accuracy_results$h==8])`. The fixed-persistence model also produces the lowest MAE (`r sprintf("%.3f", accuracy_results$MAE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==8])`). However, its mean error of `r sprintf("%.3f", accuracy_results$Mean_error[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==8])` indicates continued overprediction, while the selected AR($p$) model has a larger negative mean error of `r `.
+
+Across all forecast horizons, the fixed-persistence gap model generates the lowest RMSE among the seven evaluated models. Its relative improvement over the four-quarter-average benchmark increases with the forecast horizon. The results suggest that restricting inflation-gap persistence to a fixed coefficient of 0.46 can improve forecast accuracy relative to estimating additional autoregressive parameters. 
+
+## Step 5: Diagnose the leading one-step model 
+
+```{r selected_model_lag_gap}
+
+# refit data through 2019Q4
+inflation19 <- cpi19$inflation
+
+# construct local mean and inflation gap
+local_mean19 <- construct_local_mean(
+  inflation19, alpha = 0.05
+)
+gap19 <- inflation19 - local_mean19
+
+# fixed persistence coefficient
+rho <- 0.46
+
+# generate one step fitted predictions for fixed persistence gap forecast
+fixed_fitted <- c(
+  NA_real_,
+  head(local_mean19, -1) + rho * head(gap19,-1)
+)
+# calculate one-step prediction errors
+fixed_residuals <- inflation19 - fixed_fitted
+
+# create residuals
+residual_data <- tibble::tibble(
+  quarter = cpi19$quarter,
+  residual = fixed_residuals
+) |>
+  dplyr::filter(!is.na(residual))
+
+# residual time plot plus ACF/PACF
+residual_data |>
+  tsibble::as_tsibble(index = quarter) |>
+  feasts::gg_tsdisplay(residual, plot_type="partial", lag_max = 20)
+```
+
+
+```{r ljung_box}
+lb_result <- stats::Box.test(
+  residual_data$residual,
+  lag = 12,
+  type = "Ljung-Box",
+  fitdf = 0
+)
+lb_result
+```
+
+
+```{r res_variability}
+# residual variability
+residual_data <- residual_data |>
+  dplyr::mutate(
+    rolling_sd = slider::slide_dbl(
+      residual,
+      sd,
+      .before = 19,
+      .complete = TRUE
+    )
+  )
+
+residual_data |>
+  ggplot2::ggplot(
+    ggplot2::aes(x=quarter, y = rolling_sd)
+) +
+  ggplot2::geom_line() + 
+  ggplot2::labs(
+    title = "Fixed-persistence gap model: residual variability",
+    x = "Quarter",
+    y = "20-quarter rolling standard deviation"
+  ) + 
+  ggplot2::theme_minimal()
+```
+
+
+```{r resid_summary}
+# numerical residual summary
+tibble::tibble(
+  Mean = mean(gap_residuals),
+  SD = sd(gap_residuals),
+  Minimum = min(gap_residuals),
+  Maximum = max(gap_residuals),
+  RMSE = sqrt(mean(gap_residuals^2))
+) |>
+  knitr::kable(digits = 3)
+```
+
+
