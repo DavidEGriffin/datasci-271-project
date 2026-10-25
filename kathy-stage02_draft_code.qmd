@@ -1,119 +1,127 @@
 ---
 title: "Final Paper Stage 2"
 author:
-  name: Kathy Camp
-  email: kathy_camp@berkeley.edu
-format: pdf
+  name: Ariel Gholar, David Griffin, Killian Carter, Kathy Camp
+format: 
+  pdf:
+    documentclass: article
+    classoption: notitlepage
+    fontsize: 10pt
+    geometry: margin=0.8in
+    include-in-header: 
+      text: |
+        \usepackage{titling}
+        \setlength{\droptitle}{-3em}
+
 ---
 
 # Setup 
-
 ```{r packages}
-# data import/manipulation
+#| output: false
 library(readr)
-library(purrr)
-# time series 
-library(fpp3) # tibble, dplyr, tsibble, ggplot2, lubridate, tidyr, feasts, fable, tsibbledata, ggtime
+library(fpp3) 
 library(slider)
-# statistical modeling/diagnostics
 library(zoo)
 library(changepoint) # changepoint requires zoo
 library(stats)
 library(urca)
-# output
 library(patchwork)
 library(kableExtra)
 library(knitr)
 ```
 
 # Data
-
 ```{r load_data}
-# load CPI data 
-cpi_full <- read_csv(
-  "datasets/CPIAUCSL.csv",
-  na = c("", "NA", "-", "."),
-  comment = "#",
-  col_types = cols(
-    observation_date = col_date(), #import as a date (below import with decimals)
-    CPIAUCSL = col_double()))
-cpi_full <- cpi_full |>
-  dplyr::mutate(month = tsibble::yearmonth(observation_date)) |>
-  tsibble::as_tsibble(index = month)
+#| output: false
+read_quarterly <- function(series, name) {
+  read_csv(paste0("", series, ".csv"), show_col_types = FALSE) |>
+    mutate(observation_date = tsibble::yearmonth(observation_date)) |>
+    tsibble::as_tsibble(index = observation_date) |>
+    filter(month(observation_date) %in% c(3, 6, 9, 12)) |>
+    mutate(Quarter = tsibble::yearquarter(observation_date)) |>
+    tsibble::as_tsibble(index = Quarter) |>
+    transmute(date = as.Date(observation_date), !!name := .data[[series]])
+}
 
-# load UNEMP data
-unemp_full <- read_csv(
-  "datasets/UNRATE.csv",
-  na = c("", "NA", "-", "."),
-  comment = "#",
-  col_types = cols(
-    observation_date = col_date(),
-    UNRATE = col_double()))
-unemp_full <- unemp_full |>
-  dplyr::mutate(month = tsibble::yearmonth(observation_date)) |>
-  tsibble::as_tsibble(index = month)
+quarterly_data <- read_quarterly("CPIAUCSL", "CPI") |>
+  inner_join(read_quarterly("UNRATE", "Unemployment"), by = c("Quarter", "date")) |>
+  inner_join(read_quarterly("TB3MS",  "Treasury"),     by = c("Quarter", "date")) |>
+  mutate(Inflation = 400 * log(CPI / lag(CPI))) |>
+  tsibble::filter_index("1960 Q1" ~ .) |>
+  select(Quarter, date, CPI, Inflation, Unemployment, Treasury)
 
-# load Tbill data
-tbill_full <- read_csv(
-  "datasets/TB3MS.csv",
-  na = c("", "NA", "-", "."),
-  comment = "#",
-  col_types = cols(
-    observation_date = col_date(),
-    TB3MS = col_double()))
-tbill_full <- tbill_full |>
-  dplyr::mutate(month = tsibble::yearmonth(observation_date)) |>
-  tsibble::as_tsibble(index = month)
+initial_data <- quarterly_data |> tsibble::filter_index(~ "1999 Q4")
 ```
-
-
-```{r restrict_dates2019}
-# create inflation column, make quarterly, and limit 1960-2019
-cpi19 <- cpi_full |>
-  dplyr::filter(observation_date >= as.Date("1959-12-01")) |>
-  dplyr::filter(lubridate::month(observation_date) %in% c(3, 6, 9, 12)) |>
-  dplyr::mutate(quarter = tsibble::yearquarter(observation_date)) |>
-  tsibble::as_tsibble(index=quarter) |>
-  dplyr::mutate(inflation = 400 * log(CPIAUCSL / dplyr::lag(CPIAUCSL))) |>
-  dplyr::filter(quarter >= tsibble::yearquarter("1960 Q1")) |> 
-  dplyr::filter(quarter <= tsibble::yearquarter("2019 Q4")) |>
-  dplyr::mutate(d_inflation = inflation - lag(inflation, 1))
-
-# make quarterly and limit 1960-2019
-unemp19 <- unemp_full |>
-  dplyr::filter(observation_date >= as.Date("1960-01-01")) |>
-  dplyr::filter(lubridate::month(observation_date) %in% c(3, 6, 9, 12)) |>
-  dplyr::mutate(quarter = tsibble::yearquarter(observation_date)) |>
-  tsibble::as_tsibble(index=quarter) |> 
-  dplyr::filter(quarter <= tsibble::yearquarter("2019 Q4")) |>
-  dplyr::mutate(d_unrate = UNRATE - lag(UNRATE, 1))
-
-summary(cpi19)
-summary(unemp19)
-```
-
 
 # 4.2. Step 1: Assess stationarity and structural change
 
 
 
-# 4.3. Step 2: Set up the expanding-window forecast experiment (goes after models?)
-
+# 4.3. Step 2: Set up the expanding-window forecast experiment 
+```{r}
+# DAVID's CODE
+# Returns one row per model, origin and horizon (origin, target, h, model,
+# forecast) for every target from the first origin through last_target:
+# 80, 77 and 73 forecasts per model at h = 1, 4 and 8.
+run_expanding_window <- function(data, models,
+                                 first_origin = "1999 Q4",
+                                 last_target  = "2019 Q4",
+                                 horizons     = c(1, 4, 8)) {
+  horizons <- as.integer(horizons)
+  quarters <- data[[tsibble::index_var(data)]]   # sorted, one row per quarter
+  first <- which(quarters == tsibble::yearquarter(first_origin))
+  last  <- which(quarters == tsibble::yearquarter(last_target))
+  
+  out <- list()
+  for (i in first:(last - min(horizons))) {    # i is the row of origin T
+    data_T <- data[seq_len(i), ]               # 1960 Q1 through T, nothing later
+    for (H in horizons[i + horizons <= last]) {
+      for (m in names(models)) {
+        fc <- models[[m]](data_T, H)
+        if (length(fc) != 1 || !is.finite(fc)) {
+          stop(sprintf("'%s' at origin %s, H = %d did not return one finite number.",
+                       m, format(quarters[i]), H), call. = FALSE)
+        }
+        out[[length(out) + 1]] <- tibble(origin   = quarters[i],
+                                         target   = quarters[i + H],
+                                         h        = H,
+                                         model    = m,
+                                         forecast = as.numeric(fc))
+      }
+    }
+  }
+  bind_rows(out) |> arrange(match(model, names(models)), h, origin)
+}
+# Attaches realized inflation for each target quarter and the forecast error
+# e = actual - forecast (positive = the model underpredicted). Run this only
+# after the forecasts are made; actuals never enter their construction.
+attach_actuals <- function(forecasts, data) {
+  realized <- tibble(target = data[[tsibble::index_var(data)]],
+                     actual = data$Inflation)
+  forecasts |>
+    left_join(realized, by = "target") |>
+    mutate(error = actual - forecast)
+}
+```
 
 
 # 4.4. Step 3: Implement the core forecasting models
-
 ```{r models}
-### Model 1: random walk
-
-
+### Model 1: random walk (Ariel's code)
+fc_rw <- function(data, H) {
+  data$Inflation[nrow(data)]
+}
 
 ### Model 2: 4-quarter-average benchmarks
+forecast_4q <- function(data, H) {
+  x <- data$Inflation
+  mean(tail(x, 4))
+}
 
 
-
-### Model 3: AR(p) model: AR(3) selected
-forecast_arp <- function(x, h = 8) {
+### Model 3: AR(p) model
+forecast_arp <- function(data, H) {
+  x <- data$Inflation
   # estimate AR(1) through AR(4)
   models <- lapply(1:4, function(p) {
     stats::arima(
@@ -125,7 +133,7 @@ forecast_arp <- function(x, h = 8) {
   bic_values <- sapply(models, BIC)
   best_model <- models[[which.min(bic_values)]]
   # forecast the next h quarters
-  stats::predict(best_model, n.ahead = h)$pred
+  stats::predict(best_model, n.ahead = H)$pred[H]
 }
 
 
@@ -133,9 +141,7 @@ forecast_arp <- function(x, h = 8) {
 
 
 
-### Construct the local mean using simple exponential smoothing (this is needed in fixed-persistence model)
-# FROM ARIEL
-# 4.4.5 Local mean by simple exponential smoothing --------------------------
+### Construct the local mean using simple exponential smoothing (ARIEL's CODE)
 # tau_1960Q1 = pi_1960Q1, tau_t = (1 - alpha) * tau_{t-1} + alpha * pi_t,
 # with alpha = 0.05 fixed by the project (not estimated).
 local_mean <- function(pi, alpha = 0.05) {
@@ -149,10 +155,11 @@ local_mean <- function(pi, alpha = 0.05) {
 }
 
 # Adds `tau` (local mean) and `gap` (pi_t - tau_t) to a sample.
-# Call it on the origin-T sample, which must start in 1960Q1 so tau is
-# initialized at pi_1960Q1. The last row then holds tau_T and g_T.
-#   Gap AR (4.4.6):          fit the AR to data$gap, forecast = tau_T + g-hat
-#   Fixed persistence (4.4.7): forecast = tau_T + 0.46^h * g_T
+# Call it inside a model's fc_ function on the origin-T sample it receives,
+# which starts in 1960Q1 so tau is initialized at pi_1960Q1. The last row then
+# holds tau_T and g_T.
+#   Gap AR (4.4.6):            fit the AR to data$gap, forecast = tau_T + g-hat_{T+H}
+#   Fixed persistence (4.4.7): forecast = tau_T + 0.46^H * g_T
 add_local_mean <- function(data, alpha = 0.05) {
   data$tau <- local_mean(data$Inflation, alpha)
   data$gap <- data$Inflation - data$tau
@@ -166,105 +173,73 @@ add_local_mean <- function(data, alpha = 0.05) {
 
 
 ### Model 6: Fixed persistence gap forecast 
-forecast_fixed_gap <- function(local_mean, gap, h=8, rho = 0.46) {
-  tau_T <- tail(local_mean, 1)
-  gap_T <- tail(gap, 1)
+forecast_fixed_gap <- function(data, H, rho = 0.46) {
+  data <- add_local_mean(data)
+  tau_T <- tail(data$tau, 1)
+  gap_T <- tail(data$gap, 1)
   
-  forecast <- tau_T + rho^seq_len(h) * gap_T
+  forecast <- tau_T + rho^H * gap_T
   
-  return(forecast)
+  return(as.numeric(forecast))
 }
 
 # Model 7: direct Phillips-curve model
 
 
-
 ```
 
-
 ## Expanding window forecast experiment (Step 2)
-
 ```{r exp_window}
 
-horizons <- c(1, 4, 8)
-# target data
-inflation_values <- cpi19$inflation
-inflation_quarters <- cpi19$quarter
+#source("R/data.R")
+#source("R/forecast-framework.R")
 
-n_total <- length(inflation_values)
-
-# identify forecast origin and end
-first_origin_index <- which(
-  inflation_quarters == tsibble::yearquarter("1999 Q4")
+# all models
+models <- list(
+  #"Random walk" = x,
+  "Four-quarter average" = forecast_4q,
+  "Selected AR(p)/AR(3)" = forecast_arp,
+  #"Direct AR" = x,
+  #"Gap AR" = x,
+  "Fixed-persistence gap" = forecast_fixed_gap
+  #"Direct Phillips-curve" = x
 )
-last_origin_index <- which(
-  inflation_quarters == tsibble::yearquarter("2019 Q3")
+
+forecast_results <- run_expanding_window(
+  data = quarterly_data,
+  models = models,
+  first_origin = "1999 Q4",
+  last_target = "2019 Q4",
+  horizons = c(1, 4, 8)
 )
 
-forecast_rows <- list()
-row_id <- 1
-
-for (origin_index in first_origin_index:last_origin_index) {
-  # use only observations through origin T
-  train_index <- seq_len(origin_index)
-  train_values <- inflation_values[train_index]
-  
-  # =======
-  # Models
-  # =======
-  # Model 1: random walk without drift
-  
-  # Model 2: 4-quarter-average benchmark
-  
-  # Model 3: AR(p) --> AR(3)
-  ar_forecasts <- forecast_arp(train_values, h = 8) 
-  # Model 4: direct AR
-  
-  # construct local mean and inflation gap (Ariel's code above)
-  train_data <- tibble::tibble(
-    Inflation = train_values
-  )
-  train_data <- add_local_mean(train_data, alpha = 0.05)
-  local_mean_history <- train_data$tau
-  gap_history <- train_data$gap
-  # Model 5: gap AR model
-  
-  # Model 6: fixed persistence gap forecast
-  fixed_gap_forecasts <- forecast_fixed_gap(
-    local_mean = local_mean_history,
-    gap = gap_history,
-    h = 8,
-    rho = 0.46
-  )
-  # Model 7: direct Phillips curve
-
-  
-  #etc., etc.
-}
+forecast_results <- attach_actuals(
+  forecasts = forecast_results,
+  data = quarterly_data
+)
 ```
 
 # Step 4: Evaluate the forecasts
-
 ```{r}
 # calculate forecast accuracy by model and horizon
 accuracy_results <- forecast_results |>
-  dplyr::group_by(Model, h) |>
+  dplyr::group_by(model, h) |>
   dplyr::summarise(
     n_h = dplyr::n(),
-    RMSE = sqrt(mean(Error^2)),
-    MAE = mean(abs(Error)),
-    Mean_error = mean(Error), .groups = "drop"
+    RMSE = sqrt(mean(error^2)),
+    MAE = mean(abs(error)),
+    Mean_error = mean(error), .groups = "drop"
   ) |>
   dplyr::group_by(h) |>
   dplyr::mutate(
-    Relative_RMSE = RMSE / RMSE[Model == "Four-quarter average"]
+    Relative_RMSE = RMSE / RMSE[model == "Four-quarter average"]
     ) |>
       dplyr::ungroup() |>
       dplyr::arrange(h, RMSE)
 
 accuracy_table <- accuracy_results |>
   dplyr::transmute(
-    Model,
+    Model = model,
     Horizon = h,
     n_h,
     RMSE,
@@ -281,49 +256,30 @@ knitr::kable(
 )
 ```
 
-## Step 5: Diagnose the leading one-step model (fixed-persistence gap forecast, I believe)
-
+## Step 5: Diagnose the leading one-step model 
 ```{r refit_selected_model}
-
 # At h = 1, the fixed-persistence gap model performs the best
 
-# use data through 2019Q4
-inflation19 <- cpi19$inflation
-
-# construct local mean and inflation gap
-data19 <- tibble::tibble(
-    Inflation = inflation19
-  )
-  data19 <- add_local_mean(data19, alpha = 0.05)
-  local_mean_history19 <- data19$tau
-  gap_history19 <- data19$gap
-
-#local_mean19 <- construct_local_mean(
-#  inflation19, alpha = 0.05
-#)
-#gap19 <- inflation19 - local_mean19
+# use data through 2019 Q4
+data19 <- quarterly_data |>
+  tsibble::filter_index(~ "2019 Q4") |>
+  add_local_mean(alpha = 0.05)
 
 # fixed persistence coefficient
 rho <- 0.46
 
-# generate one step fitted predictions for fixed persistence gap forecast
+# generate one step ahead fitted predictions for fixed persistence gap forecast
 fixed_fitted <- c(
   NA_real_,
-  head(local_mean_history19, -1) + rho * head(gap_history19,-1)
+  head(data19$tau, -1) + rho * head(data19$gap,-1)
 )
 # calculate one-step prediction errors
-fixed_residuals <- inflation19 - fixed_fitted
-
-# create residuals
-residual_data <- tibble::tibble(
-  quarter = cpi19$quarter,
-  residual = fixed_residuals
-) |>
+residual_data <- data19 |>
+  dplyr::mutate(residual = Inflation - fixed_fitted) |>
   dplyr::filter(!is.na(residual))
 
 # residual time plot plus ACF/PACF
 residual_data |>
-  tsibble::as_tsibble(index = quarter) |>
   feasts::gg_tsdisplay(residual, plot_type="partial", lag_max = 20)
 ```
 
@@ -342,6 +298,7 @@ lb_result
 **Ljung-Box test** The Ljung-Box test (at 12 lags) delivers a test statistic of `r round(as.numeric(lb_result$statistic), 3)` and a p-value of `r round(lb_result$p.value, 7)`. Given this result, we reject the null hypothesis and find evidence of residual autocorrelation through lag 12. This also suggests that the fixed-persistence gap model does not account for all statistically significant serial dependence.
 
 ```{r res_variability}
+#| warning: false
 # residual variability
 residual_data <- residual_data |>
   dplyr::mutate(
@@ -355,7 +312,7 @@ residual_data <- residual_data |>
 
 residual_data |>
   ggplot2::ggplot(
-    ggplot2::aes(x=quarter, y = rolling_sd)
+    ggplot2::aes(x=Quarter, y = rolling_sd)
 ) +
   ggplot2::geom_line() + 
   ggplot2::labs(
@@ -365,7 +322,6 @@ residual_data |>
   ) + 
   ggplot2::theme_minimal()
 ```
-
 **Residual variability** The 20-quarter rolling standard deviation for the residuals indicates that the fixed-persistence gap model's residual variability changes quite a lot over time. Variability increases during the 1970s and early 1980s and declines throughout the 1990s. It increases again sharply in the 2000s and declines precipitously in the mid-2010s. The largest rolling standard deviation is larger than 5, while the smallest is below 1. This suggests that the model's error variance is not constant over time. The periods of increased variability also suggests that a relatively small number of large errors may contribute disproportionately to RMSE. These findings are consistent with earlier evidence (from Section 4.2) that inflation is not stationary.
 
 ```{r resid_summary}
@@ -374,40 +330,19 @@ residual_data |>
   dplyr::mutate(squared_error = residual^2) |>
   dplyr::arrange(dplyr::desc(squared_error)) |>
   dplyr::slice_head(n = 5) |>
-  dplyr::select(quarter, residual, squared_error) |>
+  dplyr::select(Quarter, residual, squared_error) |>
   knitr::kable(digits = 3)
 
 squared_errors <- residual_data$residual^2
 top5 <- sum(sort(squared_errors, decreasing = TRUE)[1:5]) / sum(squared_errors) * 100
-```
 
+```
 **Largest errors** The largest prediction errors are generated primarily during the 2000s, with the largest in 2008Q4. Because RMSE puts greater weight on large errors, these observations may contribute disproportionately to the overall RMSE numbers. The five largest errors shown in the table above contribute `r round(top5, 2)`% of the overall error. 
 
 # Step 6: Summarize the Stage 2 results
 
 
-## Appendix: Summary for FRED Series Used
 
-```{r appendix}
-appendix_summary <- tibble::tibble(
-  `Series Name` = c("Consumer Price Index for All Urban Consumers",
-                    "Unemployment Rate","3-Month Treasury Bill Secondary Market Rate"),
-  `FRED Code` = c("CPIAUCSL", "UNRATE", "TB3MS"),
-  `Retrieval Date` = c("2026-09-22", "2026-09-22", "2026-09-22"),
-  `First Observation` = c(
-    as.character(min(cpi_full$observation_date)),
-    as.character(min(unemp_full$observation_date)),
-    as.character(min(tbill_full$observation_date))),
-  `Last Observation` = c(
-    as.character(max(cpi_full$observation_date)),
-    as.character(max(unemp_full$observation_date)),
-    as.character(max(tbill_full$observation_date))),
-  `Original Frequency` = c("Monthly","Monthly", "Monthly"))
-
-appendix_summary |>
-  knitr::kable(format = "latex", booktabs = TRUE, longtable = FALSE) |>
-  kableExtra::kable_styling(latex_options = c("hold_position", "scale_down"))
-```
 
 
 
