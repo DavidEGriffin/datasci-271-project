@@ -229,6 +229,13 @@ tibble(
 **Classification.** We classify unemployment and the Treasury bill rate as $I(1)$. The ADF test never rejects, differencing removes the persistence, and their lag-1 autocorrelations of `r ar_f(ar_acf_at("Unemployment", 1))` and `r ar_f(ar_acf_at("Treasury", 1))` decay only slowly, so a unit root is the simpler description even though the KPSS evidence is weak. Both rates are bounded in the long run, so we read $I(1)$ as a description of their behavior over this sample rather than a claim about their true process. We classify inflation as unresolved. Its unit-root tests look like those of the two rates, but its persistence is much lower, with a lag-1 autocorrelation of `r ar_f(ar_acf_at("Inflation", 1))` that falls to `r ar_f(ar_acf_at("Inflation", 8))` by lag 8, and its mean shifts at identifiable dates that group into three broad regimes, a low early 1960s, a high 1973–81 and a lower level after 1981. A series that is stationary around a shifting mean produces the same test results, while the two rates move too persistently for a few mean shifts to explain them. That is why the AR models in 4.4.3 and 4.4.4 are worth comparing against the gap models in 4.4.5, since the AR models impose one fixed long-run mean and the gap models track a local one. The forecasts will show which description of inflation works better out of sample.
 
 ## 4.3. Step 2: Set up the expanding-window forecast experiment 
+
+We implement the expanding-window experiment with two functions that every model section shares, so all models are evaluated on identical origins, samples and targets. The function `run_expanding_window` steps through the forecast origins from 1999Q4 to 2019Q3. At each origin T, it cuts the quarterly data to 1960Q1–T and passes only that sample to each model. A model is written as a function `f(data, H)` that returns its forecast of inflation in quarter T + H.
+
+The framework skips any forecast whose target falls after 2019Q4, which gives exactly the 80, 77 and 73 forecasts per model required at each horizon. It stops with an error if a model fails to return a single finite forecast. The output has one row per model, origin and horizon, recording the origin, target quarter, horizon, model and forecast.
+
+The function `attach_actuals` is a separate step, run only after all forecasts are made. It joins realized inflation by target quarter and computes the error $e = \pi_t - \widehat\pi_{t\mid t-h}$.
+
 ```{r exp_window_function}
 # Returns one row per model, origin and horizon (origin, target, h, model,
 # forecast) for every target from the first origin through last_target:
