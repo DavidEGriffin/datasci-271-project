@@ -345,6 +345,22 @@ fc_arp <- function(data, H) {
 ```
 
 ### 4.4.4 Direct AR model
+
+The direct AR model estimates a separate regression for each forecast horizon, rather than generating forecasts recursively as in the standard AR model. For each horizon $h$, future inflation is regressed on currently observed inflation and its lags:
+
+$$
+\pi_{t+h} = c_h + \sum_{j=0}^{p_{h-1}} \phi_{h,j}\pi_{t-j}+\varepsilon_{t+h}
+$$
+At each forecast origin $T$, we estimate the equation by OLS using only observations for which the response is already known($t+h\le T$). We select $p_h \in {1, 2, 3, 4}$ using BIC, with a common estimation sample across candidate lag orders. The resulting forecast is:
+
+$$
+\widehat{\pi}_{T+h\mid T}^{\mathrm{DIRECT}}
+= \hat{c}_h + \sum_{j=0}^{p_h-1}
+\hat{\phi}_{h,j}\pi_{T-j}
+$$
+
+We implement the direct AR model with the following R function:
+
 ```{r direct_ar}
 fc_direct_ar <- function(data, H) {
   x <- data$Inflation
@@ -545,6 +561,22 @@ fc_fixed_gap <- function(data, H, rho = 0.46) {
 ```
 
 ### 4.4.8 Direct Phillips-curve model
+
+The direct Phillips-curve model extends the direct AR model by adding the unemployment rate as a predictor of future inflation. For each forecast horizon $h$, we estimate a separate regression of future inflation on current inflation, its lags, adn the unemployment rate observed at time $t$:
+
+$$
+\pi_{t+h} = c_h + \sum_{j=0}^{p_{h-1}} \phi_{h, j} \pi_{t-j} + \lambda_h u_t + \varepsilon_{t+h}
+$$
+
+At each forecast origin $T$, we estimate the equation by OLS using only observations for which the response is already known ($t+h \le T$). We select the inflation lag order $p_h \in {1, 2, 3, 4}$ using BIC, keeping unemployment in every candidate model and using a common estimation sample. The resulting forecast is:
+
+$$
+\widehat{\pi}_{T+h\mid T}^{\mathrm{PC}}
+= \hat{c}_h + \sum_{j=0}^{p_h-1}\hat{\phi}_{h,j}\pi_{T-j}
++ \hat{\lambda}_h u_T
+$$
+
+Unlike the direct AR model, this specification incorporates information about currently labor-market conditions. Comparing the two models shows whether unemployment improves inflation forecast accuracy beyond the information contained in past inflation. We implement the direct Phillips-curve model with the following R function:
 
 ```{r phillips}
 fc_direct_phillips <- function(data, H) {
