@@ -319,12 +319,12 @@ fc_4q <- function(data, H) {
 ```
 
 ### 4.4.3 AR(p) model
-The AR($p$) model forecasts inflation using its own past values. Unlike the four-quarter-average benchmark (which gives the forecast at every horizon), the AR($p$) model uses the relationship between current and lagged information to generate forecasts that evolve with the horizon. At each forecast origin, we estimate autoregressive models with lag orders $p\in{1, 2, 3, 4}$ by maximum likelihood and select the model with the lowest Bayesian Information Criterion (BIC). The model is specified as:
+The AR($p$) model forecasts inflation using its own past values. Unlike the four-quarter-average benchmark (which produces the same forecast at every horizon from a given forecast origin), the AR($p$) model uses the relationship between current and lagged information to generate forecasts that evolve with the horizon. At each forecast origin, we estimate autoregressive models with lag orders $p\in{1, 2, 3, 4}$ by maximum likelihood and select the model with the lowest Bayesian Information Criterion (BIC). The model is specified as:
 
 $$
 \pi_t =c+\sum_{j=1}^{p}\phi_j\pi_{t-j}+\varepsilon_t
 $$
-where $c$ is the intercept, $\phi_j$ are the autoregressive coefficients, and $\varepsilon_t$ is the error term. All models use the same estimation sample for comparability. Multistep forecasts are generated iteratively using the same estimated coefficients. If the model is stationary, forecasts converge toward its implied long-run mean. We implement the AR($p$) model with the following R function:
+where $c$ is the intercept, $\phi_j$ are the autoregressive coefficients, and $\varepsilon_t$ is the error term. All candidate models use the same expanding-window estimation sample for comparability. Multistep forecasts are generated iteratively using the same estimated coefficients at each horizon. If the estimated AR model is stationary, forecasts converge toward its implied long-run mean. We implement the AR($p$) model with the following R function:
 
 ```{r ar_p}
 fc_arp <- function(data, H) {
@@ -334,13 +334,15 @@ fc_arp <- function(data, H) {
     stats::arima(
       x, 
       order = c(p, 0, 0), 
+      include.mean = TRUE,
       method = "ML")
   })
   # select the model with the lowest BIC
-  bic_values <- sapply(models, BIC)
+  bic_values <- sapply(models, stats::BIC)
   best_model <- models[[which.min(bic_values)]]
   # forecast the next h quarters
-  stats::predict(best_model, n.ahead = H)$pred[H]
+  as.numeric(stats::predict(best_model, n.ahead = H)$pred[H]
+  )
 }
 ```
 
@@ -351,7 +353,7 @@ The direct AR model estimates a separate regression for each forecast horizon, r
 $$
 \pi_{t+h} = c_h + \sum_{j=0}^{p_{h-1}} \phi_{h,j}\pi_{t-j}+\varepsilon_{t+h}
 $$
-At each forecast origin $T$, we estimate the equation by OLS using only observations for which the response is already known($t+h\le T$). We select $p_h \in {1, 2, 3, 4}$ using BIC, with a common estimation sample across candidate lag orders. The resulting forecast is:
+At each forecast origin $T$, we estimate a separate regression for each horizon $h$ by OLS using only observations for which the horizon-specific response is already known ($t+h\le T$). We select $p_h \in {1, 2, 3, 4}$ using BIC, with a common estimation sample across candidate lag orders. The resulting forecast is:
 
 $$
 \widehat{\pi}_{T+h\mid T}^{\mathrm{DIRECT}}
@@ -384,7 +386,7 @@ fc_direct_ar <- function(data, H) {
     stats::lm(formula, data = reg_data)
   })
   # select order with lowest BIC
-  bic_values <- sapply(fits, BIC)
+  bic_values <- sapply(fits, stats::BIC)
   best_p <- which.min(bic_values)
   # latest observations available at origin T
   new_data <- tibble::tibble(
@@ -690,16 +692,16 @@ knitr::kable(
 
 **$h=1$.** The fixed-persistence gap model has the lowest RMSE of `r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==1])`, slightly outperforming the four-quarter-average benchmark (`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Four-quarter average" & accuracy_results$h==1])`). Its relative RMSE of `r sprintf("%.3f", accuracy_results$Relative_RMSE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==1])` is a 1.2% improvement. The two models have identical MAE values of `r sprintf("%.3f", accuracy_results$MAE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==1])`, indicating similar typical forecast errors. The random walk performs worst, with a RMSE of `r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Random walk" & accuracy_results$h==1])`.
 
-**$h=4$.** The fixed-persistence gap model again has the lowest RMSE (`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==4])`), outperforming the benchmark (`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Four-quarter average" & accuracy_results$h==4])`) by approximately 6.7%. The gap AR model ranks second with a RMSE of `r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Gap AR" & accuracy_results$h==4])`. The fixed-persistence model also has the lowest MAE (`r sprintf("%.3f", accuracy_results$MAE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==4])`), indicating smaller average absolute errors. Its negative mean error (`r sprintf("%.3f", accuracy_results$Mean_error[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==4])`) suggests a tendency to overpredict inflation.
+**$h=4$.** The fixed-persistence gap model again has the lowest RMSE (`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==4])`), outperforming the benchmark (`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Four-quarter average" & accuracy_results$h==4])`) by approximately 6.7%. The gap AR model ranks second with a RMSE of `r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Gap AR" & accuracy_results$h==4])`. The fixed-persistence model also has the lowest MAE (`r sprintf("%.3f", accuracy_results$MAE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==4])`), indicating smaller average absolute errors. Its negative mean error (`r sprintf("%.3f", accuracy_results$Mean_error[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==4])`) suggests a tendency to overpredict inflation (common among all models).
 
-**$h=8$.** The fixed-persistence gap model again has the lowest RMSE (`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==8])`), which is a 8.8% improvement over the benchmark (`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Four-quarter average" & accuracy_results$h==8])`). The gap AR model ranks second with a RMSE of `r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Gap AR" & accuracy_results$h==8])`. The fixed-persistence model also produces the lowest MAE (`r sprintf("%.3f", accuracy_results$MAE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==8])`). However, its mean error of `r sprintf("%.3f", accuracy_results$Mean_error[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==8])` indicates continued overprediction, while the selected AR($p$) model has a larger negative mean error of `r sprintf("%.3f", accuracy_results$Mean_error[accuracy_results$model == "Selected AR(p)" & accuracy_results$h==8])`.
+**$h=8$.** The fixed-persistence gap model again has the lowest RMSE (`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==8])`), which is a 8.8% improvement over the benchmark (`r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Four-quarter average" & accuracy_results$h==8])`). The gap AR model ranks second with a RMSE of `r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Gap AR" & accuracy_results$h==8])`. The fixed-persistence model also produces the lowest MAE (`r sprintf("%.3f", accuracy_results$MAE[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==8])`). However, its mean error of `r sprintf("%.3f", accuracy_results$Mean_error[accuracy_results$model == "Fixed-persistence gap" & accuracy_results$h==8])` indicates continued overprediction (as above, common among all models).
 
-Across all forecast horizons, the fixed-persistence gap model generates the lowest RMSE among the seven evaluated models. Its relative improvement over the four-quarter-average benchmark increases with the forecast horizon. The results suggest that restricting inflation-gap persistence to a fixed coefficient of 0.46 can improve forecast accuracy relative to estimating additional autoregressive parameters.
+Across all forecast horizons, the fixed-persistence gap model generates the lowest RMSE among the seven evaluated models in this out-of-sample evaluation. Its relative improvement over the four-quarter-average benchmark increases with the forecast horizon. The results suggest that restricting inflation-gap persistence to a fixed coefficient of 0.46 may reduce forecast errors relative to estimating additional autoregressive parameters.
 
 ## Step 5: Diagnose the leading one-step model 
-The gap AR model has the lowest $h=1$ RMSE, with `r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Gap AR" & accuracy_results$h==1])`. The section below diagnoses the gap AR model.
+The gap AR model has the lowest $h=1$ RMSE among the estimated core models, with `r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Gap AR" & accuracy_results$h==1])`. The section below diagnoses the gap AR model.
 
-```{r selected_model_residuals}
+```{r gap_AR_residuals}
 # use data through 2019 Q4
 data19 <- quarterly_data |>
   tsibble::filter_index(~ "2019 Q4") |>
@@ -728,7 +730,7 @@ residual_data |>
   feasts::gg_tsdisplay(residual, plot_type="partial", lag_max = 20)
 ```
 
-**Residual Time Plot and ACF/PACF**  The gap AR model's residuals mostly fluctuate around zero, though several periods show particularly large errors (for example, in the late 2000s). Residual variability also appears to change over time. Neither the ACF nor the PACF show significant spikes at the displayed lags, suggesting that there is no remaining serial dependence (at least based on the time plot and ACF/PACF).
+**Residual Time Plot and ACF/PACF**  The gap AR model's residuals mostly fluctuate around zero, though several periods show particularly large errors (for example, in the late 2000s). Residual variability also appears to change over time, suggesting possible instability in the error variance. Neither the residual ACF nor PACF show significant spikes at the displayed lags, suggesting that there is no remaining serial dependence (at least based on the time plot and ACF/PACF).
 
 ```{r ljung_box}
 lb_result <- stats::Box.test(
@@ -740,7 +742,7 @@ lb_result <- stats::Box.test(
 lb_result
 ```
 
-**Ljung-Box test** The Ljung-Box test (at 12 lags) delivers a test statistic of `r round(as.numeric(lb_result$statistic), 3)` and a p-value of `r round(lb_result$p.value, 7)`. Given this result, we fail to reject the null hypothesis of no residual autocorrelation through lag 12. This suggests that the fitted gap AR model captures much of the serial dependence in the inflation gap. 
+**Ljung-Box test** The Ljung-Box test (at 12 lags) delivers a test statistic of `r round(as.numeric(lb_result$statistic), 3)` with 9 degrees of freedom and a p-value of `r round(lb_result$p.value, 7)`. Given this result, we fail to reject the null hypothesis of no residual autocorrelation through lag 12. This result provides no strong evidence of remaining serial correlation, suggesting that the fitted gap AR model captures much of the linear serial dependence in the inflation gap. 
 
 ```{r res_variability}
 # residual variability
@@ -767,7 +769,7 @@ residual_data |>
   ) + 
   ggplot2::theme_minimal()
 ```
-**Residual variability** The 20-quarter rolling standard deviation indicates that the gap AR model's residual variability changes quite a lot over time. Variability increases during the 1970s and early 1980s and declines throughout the 1990s. It increases again sharply in the 2000s and declines precipitously in the mid-2010s. The largest rolling standard deviation is almost 5, while the smallest is below 1. This suggests that the model's error variance is not constant over time. The periods of increased variability also suggests that a relatively small number of large errors may contribute disproportionately to RMSE. These findings are consistent with earlier evidence (from Section 4.2) that inflation is not stationary.
+**Residual variability** The 20-quarter rolling standard deviation indicates that the gap AR model's residual variability changes quite a lot over time. Variability increases during the 1970s and early 1980s and declines throughout the 1990s. It increases again sharply in the 2000s and declines precipitously in the mid-2010s. The largest rolling standard deviation is almost 5, while the smallest is below 1. This suggests that the model's error variance is not stable across the sample. The periods of increased variability may also suggest that a relatively small number of large errors contribute disproportionately to RMSE. 
 
 ```{r resid_summary}
 # largest errors
@@ -783,7 +785,7 @@ squared_errors <- residual_data$residual^2
 top5 <- sum(sort(squared_errors, decreasing = TRUE)[1:5]) / 
   sum(squared_errors) * 100
 ```
-**Largest errors** The largest prediction errors are generated primarily during the 2000s and 1980s, with the largest in 2008Q4. Because RMSE puts greater weight on large errors (because it squares errors), these observations may contribute disproportionately to the gap AR model's overall RMSE numbers. The five largest errors shown in the table above contribute `r round(top5, 2)`% of the overall error. 
+**Largest residuals** The largest fitted residuals are generated primarily during the 1980s and 2000s, with the largest in 2008Q4. Because RMSE puts greater weight on large errors (because it squares errors), these observations may contribute disproportionately to the gap AR model's in-sample sum of squared residuals. The five largest errors shown in the table above contribute `r round(top5, 2)`% of the overall error. This finding is consistent with the periods of high variation observed in the rolling-standard-deviation plot. 
 
 ## Step 6: Summarize the Stage 2 results
 
