@@ -326,12 +326,12 @@ fc_4q <- function(data, H) {
 ```
 
 ### 4.4.3 AR(p) model
-The AR($p$) model forecasts inflation using its own past values. Unlike the four-quarter-average benchmark (which produces the same forecast at every horizon from a given forecast origin), the AR($p$) model uses the relationship between current and lagged information to generate forecasts that evolve with the horizon. At each forecast origin, we estimate autoregressive models with lag orders $p\in{1, 2, 3, 4}$ by maximum likelihood and select the model with the lowest Bayesian Information Criterion (BIC). The model is specified as:
+The AR($p$) model uses past observations of inflation to forecast future values. In an AR(p) process, rather than assigning equal weight to the previous four observations (as the four-quarter-average), the AR(p) model allows inflation to depend on its own lagged values, with the contribution of each lag estimated from the data. For each forecast origin, we estimate AR(1) thorugh AR(4) using maximum likelihood using the available expanding-window sample. We then select the lag order with the lowest Bayesian Information Criterion (BIC), which penalizes additional parameters while accounting for model fit. The AR(p) model is given by:
 
 $$
 \pi_t =c+\sum_{j=1}^{p}\phi_j\pi_{t-j}+\varepsilon_t
 $$
-where $c$ is the intercept, $\phi_j$ are the autoregressive coefficients, and $\varepsilon_t$ is the error term. All candidate models use the same expanding-window estimation sample for comparability. Multistep forecasts are generated iteratively using the same estimated coefficients at each horizon. If the estimated AR model is stationary, forecasts converge toward its implied long-run mean. We implement the AR($p$) model with the following R function:
+where $c$ is the intercept, $\phi_j$ are the AR coefficients, and $\varepsilon_t$ is the error. To enable BIC values to be comparable across lag orders, we estimate all four candidate models using the same observations within each forecast window. We implement the AR($p$) model with the following R function:
 
 ```{r ar_p}
 fc_arp <- function(data, H) {
@@ -355,20 +355,12 @@ fc_arp <- function(data, H) {
 
 ### 4.4.4 Direct AR model
 
-The direct AR model estimates a separate regression for each forecast horizon, rather than generating forecasts recursively as in the standard AR model. For each horizon $h$, future inflation is regressed on currently observed inflation and its lags:
+The direct AR model forecasts inflation by estimating a separate regression for each forecast horizon. In the AR(p) model above, forecasts beyond one period are captured recursively using the estimated coefficients. In contrast, the direct AR model estimates a separate model for each forecast horizon that relates future inflation to inflation at the forecast origin. The model is given by:
 
 $$
 \pi_{t+h} = c_h + \sum_{j=0}^{p_{h-1}} \phi_{h,j}\pi_{t-j}+\varepsilon_{t+h}
 $$
-At each forecast origin $T$, we estimate a separate regression for each horizon $h$ by OLS using only observations for which the horizon-specific response is already known ($t+h\le T$). We select $p_h \in {1, 2, 3, 4}$ using BIC, with a common estimation sample across candidate lag orders. The resulting forecast is:
-
-$$
-\widehat{\pi}_{T+h\mid T}^{\mathrm{DIRECT}}
-= \hat{c}_h + \sum_{j=0}^{p_h-1}
-\hat{\phi}_{h,j}\pi_{T-j}
-$$
-
-We implement the direct AR model with the following R function:
+At each forecast origin $T$, we estimate a separate regression for each horizon $h$ by OLS using only observations for which both the predictors and the horizon-specific response is already known. For each horizon, we consider the lag orders $p_h \in {1, 2, 3, 4}$ and select the model with the lowest BIC. The selected model is then used to produce a h-step ahead forecast directly from teh observations available at forecast origin (T), without using forecasts from earlier horizons as input. We implement the direct AR model with the following R function:
 
 ```{r direct_ar}
 fc_direct_ar <- function(data, H) {
@@ -549,13 +541,13 @@ fc_gap_ar <- function(data, H, max_p = 4) {
 
 ### 4.4.7 Fixed-persistence gap forecast
 
-The fixed-persistence gap model forecasts inflation using the slowly changing local mean $\tau_t$ from Section 4.4.5 and the inflation gap $g_t = \pi_t-\tau_t$. Following Faust and Wright (2013), we fix the persistence coefficient at 0.46 rather than estimating it at each forecast origin. The forecast is specified as:
+The fixed-persistence gap model uses the local mean ($tau_t$, see above) together with the inflation gap to forecast inflation. We follow Faust and Wright (2013) and set the persistence coefficient to 0.46 rather than estimating it from the data. The forecast is given by:
 
 $$
 \widehat{\pi}_{T+h\mid T}^{FIX}
 = \tau_T + 0.46^h g_T
 $$
-where $T$ is the most recently observed quarter and $h$ is the forecast horizon. At each expanding-window origin, we calculate the local mean and gap using only the available observations. The local m ean is held at $\tau_T$ over the forecast period, while the inflation gap shrings geometrically toward zero as the horizon increases. Comparing this model with the estimated gap AR model shows whether estimating additional persistence parameters improves forecast accuracy enough to offset their estimation uncertainty. We implement the fixed-persistence gap model with the following R function:
+where $T$ is the latest observed quarter and $h$ is the forecast horizon. At each forecast origin, the local mean and inflation gap are calculated from the observations available up to that quarter. The local mean remains constant over the forecast horizon, while the gap gradually approaches zero. Comparing this model to the gap AR model allows us to determine whether estimating the persistence coefficient leads to more accurate forecasts despite the additional estimation uncertainty. We implement the fixed-persistence gap model with the following R function:
 
 ```{r fp_gap}
 fc_fixed_gap <- function(data, H, rho = 0.46) {
@@ -571,21 +563,12 @@ fc_fixed_gap <- function(data, H, rho = 0.46) {
 
 ### 4.4.8 Direct Phillips-curve model
 
-The direct Phillips-curve model extends the direct AR model by adding the unemployment rate as a predictor of future inflation. For each forecast horizon $h$, we estimate a separate regression of future inflation on current inflation, its lags, adn the unemployment rate observed at time $t$:
+The direct Phillips-curve model builds on the direct AR model by adding the unemployment rate as a predictor of future inflation. A separate regression is fitted for each horizon $h$, with future inflation regressed on the current unemployment rate and current and lagged inflation. The model is given by:
 
 $$
 \pi_{t+h} = c_h + \sum_{j=0}^{p_{h-1}} \phi_{h, j} \pi_{t-j} + \lambda_h u_t + \varepsilon_{t+h}
 $$
-
-At each forecast origin $T$, we estimate the equation by OLS using only observations for which the response is already known ($t+h \le T$). We select the inflation lag order $p_h \in {1, 2, 3, 4}$ using BIC, keeping unemployment in every candidate model and using a common estimation sample. The resulting forecast is:
-
-$$
-\widehat{\pi}_{T+h\mid T}^{\mathrm{PC}}
-= \hat{c}_h + \sum_{j=0}^{p_h-1}\hat{\phi}_{h,j}\pi_{T-j}
-+ \hat{\lambda}_h u_T
-$$
-
-Unlike the direct AR model, this specification incorporates information about currently labor-market conditions. Comparing the two models shows whether unemployment improves inflation forecast accuracy beyond the information contained in past inflation. We implement the direct Phillips-curve model with the following R function:
+At a given forecast origin $T$, OLS estimation is restricted to observations for which future inflation is already observed. We look to inflation lag orders $p_h \in {1, 2, 3, 4}$ and choose from them using BIC. Unemployment is included in all four of these candidate models, and the estimation sample is kept the same across all four. By comparing the forecast errors of the direct Phillips-curve model with those of the direct AR model (which does not include unemployment), we can determine whether unemployment provides useful information about future inflation beyond what is already integrated in current and lagged inflation. We implement the direct Phillips-curve model with the following R function:
 
 ```{r phillips}
 fc_direct_phillips <- function(data, H) {
