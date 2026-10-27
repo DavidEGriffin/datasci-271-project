@@ -65,7 +65,11 @@ quarterly_data <- read_quarterly("CPIAUCSL", "CPI") |>
 initial_data <- quarterly_data |> tsibble::filter_index(~ "1999 Q4")
 ```
 
-### 4.2 Assess stationarity and structural change
+## 4.1 Purpose
+
+Stage 2 compares inflation forecasts using the corrected Stage 1 data, with every series taken as the end-of-quarter value of the monthly FRED series and inflation computed as $\pi_t=400\log(P_t/P_{t-1})$ from CPIAUCSL. We check stationarity over 1960Q1–1999Q4 (4.2), set up an expanding-window experiment (4.3), build the seven core models from Faust and Wright (2013) (4.4), and compare their forecasts through 2019Q4 (4.5). Lastly, we diagnose the best one-step model (4.6) and summarize the results (4.7).
+
+## 4.2 Assess stationarity and structural change
 
 We use the initial period, 1960Q1–1999Q4 (160 quarters), for every test in this section. @fig-ariel-levels shows the three series, with the segment means from a change-point analysis of inflation described below, and @fig-ariel-acf shows their autocorrelation functions.
 
@@ -355,51 +359,38 @@ fc_arp <- function(data, H) {
 
 ### 4.4.4 Direct AR model
 
-The direct AR model forecasts inflation by estimating a separate regression for each forecast horizon. In the AR(p) model above, forecasts beyond one period are captured recursively using the estimated coefficients. In contrast, the direct AR model estimates a separate model for each forecast horizon that relates future inflation to inflation at the forecast origin. The model is given by:
+```{r kc-direct-diag}
+# Lag length and unemployment coefficient for each direct forecast
+kc_diag <- bind_rows(lapply(kc_horizons, function(hh) {
+  bind_rows(lapply(kc_first:(kc_last - hh), function(i) {
+    pi_T <- quarterly_data$Inflation[seq_len(i)]
+    u_T  <- quarterly_data$Unemployment[seq_len(i)]
+    ar   <- direct_fit(pi_T, hh)
+    pc   <- direct_fit(pi_T, hh, u = u_T)
+    tibble(origin = kc_q[i], h = hh,
+           model  = c("Direct AR", "Direct Phillips curve"),
+           refit  = c(ar$forecast, pc$forecast),
+           p      = c(ar$p, pc$p),
+           lambda = c(ar$lambda, pc$lambda))
+  }))
+}))
 
-$$
-\pi_{t+h} = c_h + \sum_{j=0}^{p_{h-1}} \phi_{h,j}\pi_{t-j}+\varepsilon_{t+h}
-$$
-At each forecast origin $T$, we estimate a separate regression for each horizon $h$ by OLS using only observations for which both the predictors and the horizon-specific response is already known. For each horizon, we consider the lag orders $p_h \in {1, 2, 3, 4}$ and select the model with the lowest BIC. The selected model is then used to produce a h-step ahead forecast directly from teh observations available at forecast origin (T), without using forecasts from earlier horizons as input. We implement the direct AR model with the following R function:
-
-```{r direct_ar}
-fc_direct_ar <- function(data, H) {
-  x <- data$Inflation
-  n <- length(x)
-  # only responses observed through origin T
-  t <- 4:(n-H)
-  # construct horizon-specific regression data
-  reg_data <- tibble::tibble(
-    y = x[t+H],
-    lag0 = x[t],
-    lag1 = x[t-1],
-    lag2 = x[t-2],
-    lag3 = x[t-3]
-  )
-  # estimate candidate orders p= 1, 2, 3, 4
-  fits <- lapply(1:4, function(p) {
-    predictors <- paste0("lag", 0:(p-1))
-    formula <- stats::reformulate(
-      predictors, response = "y"
-    )
-    stats::lm(formula, data = reg_data)
-  })
-  # select order with lowest BIC
-  bic_values <- sapply(fits, stats::BIC)
-  best_p <- which.min(bic_values)
-  # latest observations available at origin T
-  new_data <- tibble::tibble(
-    lag0 = x[n],
-    lag1 = x[n-1],
-    lag2 = x[n-2],
-    lag3 = x[n-3]
-  )
-  # forecast inflation directly at T + h
-  as.numeric(
-    stats::predict(fits[[best_p]], newdata = new_data)
-  )
+kc_p_text <- function(m, hh, first = FALSE) {
+  ps <- kc_diag$p[kc_diag$model == m & kc_diag$h == hh]
+  if (length(unique(ps)) == 1) paste0("$p_h=", ps[1], "$ at every origin")
+  else paste0(if (first) "$p_h$ " else "", "between ", min(ps), " and ", max(ps))
 }
 ```
+
+The direct AR fits a separate regression for each horizon instead of iterating one equation forward.
+
+$$
+\pi_{t+h}=c_h+\sum_{j=0}^{p_h-1}\phi_{h,j}\,\pi_{t-j}+\varepsilon_{t+h}.
+$$
+
+At origin $T$, we only use rows with $t+h\le T$, so the response is already observed. We pick $p_h$ from 1 to 4 by BIC on a common set of rows, and the forecast plugs $\pi_T,\dots,\pi_{T-p_h+1}$ into the chosen equation. BIC picks `r kc_p_text("Direct AR", 1, first = TRUE)` for $h=1$, `r kc_p_text("Direct AR", 4)` for $h=4$, and `r kc_p_text("Direct AR", 8)` for $h=8$.
+
+Sources: [W4S1P23, W4S1P24, W4S2P16, W4S2P18, W6S2P12, W7S2P33]
 
 ### 4.4.5 Local mean by exponential smoothing
 Following Faust and Wright (2013), we estimate a slowly changing local mean $\tau_t$ by simple exponential smoothing with $\alpha=0.05$, a weight the project fixes rather than estimates. We start the recursion at the first observation and update one quarter at a time:
@@ -563,58 +554,34 @@ fc_fixed_gap <- function(data, H, rho = 0.46) {
 
 ### 4.4.8 Direct Phillips-curve model
 
-The direct Phillips-curve model builds on the direct AR model by adding the unemployment rate as a predictor of future inflation. A separate regression is fitted for each horizon $h$, with future inflation regressed on the current unemployment rate and current and lagged inflation. The model is given by:
-
-$$
-\pi_{t+h} = c_h + \sum_{j=0}^{p_{h-1}} \phi_{h, j} \pi_{t-j} + \lambda_h u_t + \varepsilon_{t+h}
-$$
-At a given forecast origin $T$, OLS estimation is restricted to observations for which future inflation is already observed. We look to inflation lag orders $p_h \in {1, 2, 3, 4}$ and choose from them using BIC. Unemployment is included in all four of these candidate models, and the estimation sample is kept the same across all four. By comparing the forecast errors of the direct Phillips-curve model with those of the direct AR model (which does not include unemployment), we can determine whether unemployment provides useful information about future inflation beyond what is already integrated in current and lagged inflation. We implement the direct Phillips-curve model with the following R function:
-
-```{r phillips}
-fc_direct_phillips <- function(data, H) {
-  x <- data$Inflation
-  u <- data$Unemployment
-  n <- length(x)
-  stopifnot(length(u) == n)
-  # only responses through origin T
-  t <- 4:(n - H)
-  # construct horizon-specific regression data
-  reg_data <- tibble::tibble(
-      y = x[t+H],
-      lag0 = x[t],
-      lag1 = x[t-1],
-      lag2 = x[t-2],
-      lag3 = x[t-3],
-      UNRATE = u[t]
-    )
-  # estimate candidate orders p = 1, 2, 3, 4
-  fits <- lapply(1:4, function(p) {
-      predictors <- c(
-        paste0("lag", 0:(p-1)),
-        "UNRATE"
-      )
-      formula <- stats::reformulate(
-      predictors, response = "y"
-    )
-      stats::lm(formula, data = reg_data)
-    })
-  # select order with lowest BIC
-  bic_values <- sapply(fits, BIC)
-  best_p <- which.min(bic_values)
-  # latest observations available at origin T
-  new_data <- tibble::tibble(
-    lag0 = x[n],
-    lag1 = x[n-1],
-    lag2 = x[n-2],
-    lag3 = x[n-3],
-    UNRATE = u[n]
-  )
-  # forecast inflation at T + H
-  as.numeric(
-    stats::predict(fits[[best_p]], newdata = new_data)
-    )
-  }
+```{r kc-lambda}
+# Sign of the unemployment coefficient [W7S2P9, W9S2P30]
+kc_lam <- kc_diag |>
+  filter(model == "Direct Phillips curve") |>
+  group_by(h) |>
+  summarise(mean = mean(lambda), neg = mean(lambda < 0), .groups = "drop")
+kc_lam_at  <- function(hh, col = "mean") kc_lam[[col]][kc_lam$h == hh]
+kc_lam_pos <- kc_lam$h[kc_lam$mean > 0]
+kc_lam_text <- if (length(kc_lam_pos) == 0) {
+  "The negative sign fits the Phillips curve at every horizon."
+} else if (kc_lam$mean[kc_lam$h == 1] < 0) {
+  paste0("The negative sign at the shorter horizons fits the Phillips curve, but the sign flips at $h=",
+         paste(kc_lam_pos, collapse = "$ and $h="),
+         "$, so unemployment likely doesn't say much about inflation that far out.")
+} else {
+  "The coefficient doesn't have the negative sign the Phillips curve predicts."
+}
 ```
+
+The direct Phillips curve is the direct AR with the unemployment rate at $t$ added.
+
+$$
+\pi_{t+h}=c_h+\sum_{j=0}^{p_h-1}\phi_{h,j}\,\pi_{t-j}+\lambda_h u_t+\varepsilon_{t+h}.
+$$
+
+We keep $u_t$ in every equation, pick the inflation lags by BIC the same way, and forecast with $u_T$, which is already observed at the origin. The unemployment coefficient averages `r kc_f(kc_lam_at(1), 3)` at $h=1$, `r kc_f(kc_lam_at(4), 3)` at $h=4$, and `r kc_f(kc_lam_at(8), 3)` at $h=8$. `r kc_lam_text`
+
+Sources: [W7S2P6, W7S2P9, W7S2P33, W9S2P30]
 
 ## Expanding window forecast experiment (Step 2)
 ```{r exp_window}
@@ -643,7 +610,7 @@ forecast_results <- attach_actuals(
 )
 ```
 
-## Step 4: Evaluate the forecasts
+## 4.5 Step 4: Evaluate the forecasts
 ```{r evaluate}
 # calculate forecast accuracy by model and horizon
 accuracy_results <- forecast_results |>
@@ -688,7 +655,7 @@ knitr::kable(
 
 Across all forecast horizons, the fixed-persistence gap model generates the lowest RMSE among the seven evaluated models in this out-of-sample evaluation. Its relative improvement over the four-quarter-average benchmark increases with the forecast horizon. The results suggest that restricting inflation-gap persistence to a fixed coefficient of 0.46 may reduce forecast errors relative to estimating additional autoregressive parameters.
 
-## Step 5: Diagnose the leading one-step model 
+## 4.6 Step 5: Diagnose the leading one-step model 
 The gap AR model has the lowest $h=1$ RMSE among the estimated core models, with `r sprintf("%.3f", accuracy_results$RMSE[accuracy_results$model == "Gap AR" & accuracy_results$h==1])`. The section below diagnoses the gap AR model.
 
 ```{r gap_AR_residuals}
@@ -777,7 +744,7 @@ top5 <- sum(sort(squared_errors, decreasing = TRUE)[1:5]) /
 ```
 **Largest residuals** The largest fitted residuals are generated primarily during the 1980s and 2000s, with the largest in 2008Q4. Because RMSE puts greater weight on large errors (because it squares errors), these observations may contribute disproportionately to the gap AR model's in-sample sum of squared residuals. The five largest errors shown in the table above contribute `r round(top5, 2)`% of the overall error. This finding is consistent with the periods of high variation observed in the rolling-standard-deviation plot. 
 
-## Step 6: Summarize the Stage 2 results
+## 4.7 Step 6: Summarize the Stage 2 results
 
 
 
