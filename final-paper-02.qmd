@@ -789,8 +789,4 @@ top5 <- sum(sort(squared_errors, decreasing = TRUE)[1:5]) /
 
 ## 4.7 Step 6: Summarize the Stage 2 results
 
-
-
-
-
-
+The fixed-persistence gap model has the lowest RMSE at every horizon and beats the four-quarter average at all three, while the gap AR model also beats it at $h=4$ and $h=8$. The random-walk model is the worst at every horizon. MAE is only 59% to 69% of RMSE, so a few big misses like 2008 Q4 push RMSE up for every model. Lastly, 20 of the 21 model and horizon combinations have negative mean error, so over prediction is the norm from 2000 to 2019. The DM–HLN tests will come in the final project.
