@@ -95,7 +95,7 @@ ar_segments_for <- function(x, dates, scale = 1) {
 
 ar_pi_scale  <- ar_noise_scale(ar_initial$Inflation)
 ar_segs      <- ar_segments_for(ar_initial$Inflation, ar_initial$date, ar_pi_scale)
-ar_n_raw     <- nrow(ar_segments_for(ar_initial$Inflation, ar_initial$date)) - 1  # Stage 1
+ar_n_raw     <- nrow(ar_segments_for(ar_initial$Inflation, ar_initial$date)) - 1
 ar_n_scaled  <- nrow(ar_segs) - 1
 ar_n_other   <- sapply(c("Unemployment", "Treasury"), function(v)
   nrow(ar_segments_for(ar_initial[[v]], ar_initial$date,
@@ -191,7 +191,9 @@ ar_ur_tbl <- bind_rows(lapply(names(ar_series_labels), function(v) {
   mutate(adf_reject = adf < adf_cv, kpss_reject = kpss > kpss_cv,
          kpss_long_reject = kpss_long > kpss_cv)
 
-ar_g    <- function(v, form, col) ar_ur_tbl[[col]][ar_ur_tbl$series == v & ar_ur_tbl$form == form]
+ar_g    <- function(v, form, col) {
+  ar_ur_tbl[[col]][ar_ur_tbl$series == v & ar_ur_tbl$form == form]
+}
 ar_lv   <- ar_ur_tbl |> filter(form == "Level")
 ar_dfs  <- ar_ur_tbl |> filter(form != "Level")
 ```
@@ -206,8 +208,10 @@ In levels, no ADF statistic reaches the 5% critical value of `r ar_f(ar_ur_tbl$a
 #| tbl-cap: "Stationarity summary, 1960Q1–1999Q4. ADF entries are $\\tau$ statistics with the BIC-selected lag, and KPSS entries are test statistics with the short bandwidth unless marked long. 5% critical values are -2.88 (ADF) and 0.463 (KPSS)."
 #| tbl-colwidths: [17, 23, 26, 21, 13]
 ar_dec <- function(x) ifelse(x, "reject", "do not reject")
-ar_ev  <- function(v, form) paste0(ar_f(ar_g(v, form, "adf")), ", lag ", ar_g(v, form, "lag"),
-                                " (", ar_dec(ar_g(v, form, "adf_reject")), ")")
+ar_ev  <- function(v, form) {
+  paste0(ar_f(ar_g(v, form, "adf")), ", lag ", ar_g(v, form, "lag"),
+         " (", ar_dec(ar_g(v, form, "adf_reject")), ")")
+}
 
 tibble(
   Series = c("CPI inflation", "Unemployment", "Treasury bill rate"),
@@ -222,7 +226,8 @@ tibble(
            ar_f(ar_g(v, "First difference", "kpss"), 3), " (",
            ar_dec(ar_g(v, "First difference", "kpss_reject")), ").")),
   `Structural-change evidence` = c(
-    paste(ar_n_scaled, "mean breaks after rescaling. Low early 1960s, high 1973–81, lower after 1981."),
+    paste(ar_n_scaled,
+    "mean breaks after rescaling. Low early 1960s, high 1973–81, lower after 1981."),
     "No discrete regimes. Long cyclical swings.",
     "No discrete regimes. Rises with inflation, 1979–82 spike."),
   Classification = c("Unresolved", "$I(1)$", "$I(1)$")
@@ -463,8 +468,12 @@ ar_one_sided   <- identical(ar_origin_tau, ar_full_tau[seq_along(ar_origin_tau)]
 stopifnot(ar_one_sided)
 
 ar_lm_hist <- add_local_mean(ar_hist_sample)
-ar_tau_at  <- function(qtr) ar_lm_hist$tau[ar_lm_hist$Quarter == tsibble::yearquarter(qtr)]
-ar_gap_at  <- function(qtr) ar_lm_hist$gap[ar_lm_hist$Quarter == tsibble::yearquarter(qtr)]
+ar_tau_at  <- function(qtr) {
+  ar_lm_hist$tau[ar_lm_hist$Quarter == tsibble::yearquarter(qtr)]
+}
+ar_gap_at  <- function(qtr) {
+  ar_lm_hist$gap[ar_lm_hist$Quarter == tsibble::yearquarter(qtr)]
+}
 ```
 
 The recursion is one-sided because $\tau_t$ depends only on $\pi_t$ and earlier values. At each forecast origin $T$, `add_local_mean()` runs the update from 1960Q1 through $T$ on the origin's own sample, so $\tau_T$ and $g_T$ use nothing after $T$. As a check, the local mean computed from data through 1999Q4 matches the 1960Q1–1999Q4 portion of the local mean computed through 2019Q4 exactly. The function also reproduces the guide's example, where a previous local mean of 3.0 and current inflation of 5.0 give $\tau_t=3.1$ and $g_t=1.9$.
