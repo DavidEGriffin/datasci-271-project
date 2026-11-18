@@ -1,0 +1,78 @@
+---
+title: "Forecasting U.S. CPI Inflation"
+subtitle: "A Recursive Out-of-Sample Study"
+author:
+  - "Student Name"
+  - "Student Name"
+date: today
+format:
+  pdf:
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    geometry: margin=1in
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+
+# Appendix D — Stage 3 analysis
+
+Present the detailed Stage 3 work on the VAR, local-level state-space model, forecast combinations, complete model comparison, model selection, and monitoring. The main paper should report the results needed to answer the research question; this appendix provides the supporting Stage 3 analysis.
+
+## Step 1
+
+```{r VAR}
+
+```
+
+
+## Step 2
+
+```{r state_space}
+
+```
+
+## Step 3
+
+```{r forecast_combinations}
+
+```
+
+
+## Step 4
+
+```{r }
+
+```
+
+## Step 5
+
+```{r }
+
+```
+
+
+## Step 6
+
+```{r }
+
+```
+
+
+## Step 7
+
+```{r }
+
+```
+
+
+## Step 8
+
+```{r }
+
+```
+
+
